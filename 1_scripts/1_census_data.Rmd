@@ -1,0 +1,325 @@
+---
+title: "EVST 496 Census Data, Week 9 Data"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+## Description
+The goal of this week was to pull all of the census data from the city of Holyoke and the city of Chelsea. In addition, another objective was for me to compare this to the state to better understand the local demographics. Earlier today, I received good news that I will be able to access the HERO data from Clark University, meaning I can do front versus back yard comparisons of tree survivorship. Sadly, it seems like these are the only two datasets that have this information—which may be my only form of comparison at the moment.
+
+The data is based off of 2021 ACS Census data aggregated by the block group level.
+
+
+## Graphs
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Loading all packages
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          # , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'tidycensus' # tidy census package
+          , 'tidygeocoder' # geo coding
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          , 'shiny'
+          , 'leafsync'  # linked maps
+          , 'RColorBrewer'
+          , 'DT'
+          , 'openxlsx'
+          , 'mapdeck'
+          , 'biscale' #used with ggplot to make bivariate maps
+          , 'cowplot' #used to make more aesthetic ggplot visuals
+          , 'ggspatial' #creates a basemap for your ggplots
+          , 'classInt' #find me breaks without doing manualcalculations
+          , 'rgl' #needs for rayshader
+          , 'rayshader' #good data viz for 3d bar graphs
+          , 'leaflet' #for heatmaps and more unique, customizable maps
+          , 'leaflet.extras'
+          , 'tidytext'
+          )     
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+
+# 3. Items for tidy census
+census_api_key('58fc555c77c229747ade7d9fe50e7c71297cf91a', install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+options(tigris_use_cache = TRUE)
+```
+
+
+```{r Loading Tapestry, echo=FALSE, message=FALSE}
+# 1. Loading the list of variables from ACS
+variables_acs <- 
+  tidycensus::load_variables('acs5', year = 2021)
+
+# 2. Loading the list of variables from ACS 
+my_vars <- c(  'median_household_income' = 'B19013_001'
+             , 'total_population' = 'B01003_001'
+             , 'households' = 'B11001_001'
+             , 'white_alone' = 'B03002_003'
+             , 'black_alone' = 'B03002_004'
+             , 'american_indian_alone' = 'B03002_005'
+             , 'asian_alone' = 'B03002_006'
+             , 'native_hawaiian_alone' = 'B03002_007'
+             , 'other_alone' = 'B03002_008'
+             , 'two_or_more_alone' = 'B03002_009'
+             , 'hispanic_alone' = 'B03002_012'
+             , 'labor_force_total' = 'B23025_003'
+             , 'unemployed_total' = 'B23025_005'
+             , 'median_age' = 'B01002_001'
+             , 'total_population_over_25' = 'B15003_001'
+             , 'ed_hs_degree' = 'B15003_017'
+             , 'ed_ged_degree' = 'B15003_018'
+             , 'ed_college_less_1_year' = 'B15003_019'
+             , 'ed_college_more_1_year' = 'B15003_020'
+             , 'ed_associate_degree' = 'B15003_021'
+             , 'ed_plus_bachelor_degree' = 'B15003_022'
+             , 'ed_plus_master_degree' = 'B15003_023'
+             , 'ed_plus_professional_degree' = 'B15003_024'
+             , 'ed_plus_doctorate_degree' = 'B15003_025'
+             , 'median_gross_rent' = 'B25064_001'
+             , 'median_home_value' = 'B25077_001'
+             , 'owner_occupied' = 'B25003_002'
+             , 'renter_occupied' = 'B25003_003'
+            )
+
+# 3. Loading the CBGs
+cbg_massachusetts<-
+  tidycensus::get_acs(
+      geography = 'block group'
+    , state = 'Massachusetts'
+    , variables = my_vars
+    , year = 2021
+    , geometry = TRUE
+    , output = 'wide'
+    , moe_level = 95
+    ) |>
+    st_transform(crs = st_crs(4326)) |>
+    dplyr::select(-ends_with("M")) |> 
+    rename_with(~ gsub("E$", "", .x), ends_with("E")) |>  
+    rename(NAME = NAM) |>
+    mutate(
+      pct_at_least_hs = (rowSums(across(starts_with("ed_"))))/total_population_over_25, #This gets percentage
+      pct_at_least_college = (rowSums(across(starts_with("ed_plus"))))/total_population_over_25 #This gets percentage
+    ) |>
+    dplyr::select(-starts_with("ed_"))
+
+# 4. Reading the geopackages
+holyoke_boundary <-
+  st_read("/Users/eduardosmarin/Desktop/EVST 496 Senior Research Project/03 EVST 496 Data/B Input Data/Holyoke/holyoke_boundary.gpkg") |>
+  st_transform(st_crs(cbg_massachusetts))
+
+chelsea_boundary <-
+  st_read("/Users/eduardosmarin/Desktop/EVST 496 Senior Research Project/03 EVST 496 Data/B Input Data/Chelsea/chelsea_boundary.gpkg") |>
+  st_transform(st_crs(cbg_massachusetts))
+
+
+# . Select block groups that fall within each boundary
+cbgs_chelsea <- cbg_massachusetts[
+  st_intersects(cbg_massachusetts, chelsea_boundary, sparse = FALSE)[, 1],
+] |>
+  filter(
+    !GEOID %in% c(
+      "250173424023", "250173424024", "250173426002", "250173421014",
+      "250173421013", "250251701023", "250251701013", "250251706012"
+    )
+  )
+
+cbgs_holyoke <- 
+  cbg_massachusetts[
+  st_intersects(cbg_massachusetts, holyoke_boundary, sparse = FALSE)[, 1],
+] |>
+  filter(!GEOID %in% c(
+    "250138122021", "250138111023", "250138111022", "250138111021",
+    "250138111012", "250138111024", "250138111011", "250138113013",
+    "250158211012", "250158211014", "250158213001", "250158225004",
+    "250158211012", "250158213003", "250158223001", "250158225004",
+    "250138125004", "250158224012", "250158214004"
+  ))
+
+```
+
+```{r echo=FALSE}
+library(scales)
+
+# Define custom color palette
+colors <- c("Holyoke" = "#66c2cc", "Chelsea" = "#f89c74", "Massachusetts" = "#f6cf71")
+
+# Clean variable labels for plotting
+pretty_names <- c(
+  median_income = "Median Household Income",
+  median_age = "Median Age",
+  pct_white = "Percent White (Non-Hispanic)",
+  pct_black = "Percent Black or African American",
+  pct_asian = "Percent Asian",
+  pct_hispanic = "Percent Hispanic or Latino",
+  pct_at_least_hs = "Percent with High School Education or Higher",
+  pct_at_least_college = "Percent with Bachelor’s Degree or Higher",
+  median_home_value = "Median Home Value",
+  median_rent = "Median Gross Rent",
+  pct_owner_occupied = "Percent Owner-Occupied Housing",
+  pct_renter_occupied = "Percent Renter-Occupied Housing"
+)
+
+# Helper to summarize a region
+summarize_region <- function(data, region_name) {
+  data |>
+    st_drop_geometry() |>
+    summarise(
+      region = region_name,
+      median_income = weighted.mean(median_household_income, total_population, na.rm = TRUE),
+      median_age = weighted.mean(median_age, total_population, na.rm = TRUE),
+      pct_white = sum(white_alone, na.rm = TRUE) / sum(total_population, na.rm = TRUE),
+      pct_black = sum(black_alone, na.rm = TRUE) / sum(total_population, na.rm = TRUE),
+      pct_asian = sum(asian_alone, na.rm = TRUE) / sum(total_population, na.rm = TRUE),
+      pct_hispanic = sum(hispanic_alone, na.rm = TRUE) / sum(total_population, na.rm = TRUE),
+      pct_at_least_hs = weighted.mean(pct_at_least_hs, total_population_over_25, na.rm = TRUE),
+      pct_at_least_college = weighted.mean(pct_at_least_college, total_population_over_25, na.rm = TRUE),
+      median_rent = weighted.mean(median_gross_rent, households, na.rm = TRUE),
+      median_home_value = weighted.mean(median_home_value, households, na.rm = TRUE),
+      pct_owner_occupied = sum(owner_occupied, na.rm = TRUE) / (sum(owner_occupied + renter_occupied, na.rm = TRUE)),
+      pct_renter_occupied = sum(renter_occupied, na.rm = TRUE) / (sum(owner_occupied + renter_occupied, na.rm = TRUE))
+    )
+}
+
+# Summarize regions
+summary_holyoke <- summarize_region(cbgs_holyoke, "Holyoke")
+summary_chelsea <- summarize_region(cbgs_chelsea, "Chelsea")
+summary_mass <- summarize_region(cbg_massachusetts, "Massachusetts")
+summary_all <- bind_rows(summary_holyoke, summary_chelsea, summary_mass)
+
+# ---- Plot 1: Median Household Income ----
+summary_all |>
+  ggplot(aes(x = region, y = median_income, fill = region)) +
+  geom_col() +
+  geom_text(aes(label = dollar(median_income)), vjust = -0.5, size = 4) +
+  scale_fill_manual(values = colors) +
+  scale_y_continuous(labels = dollar) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Median Household Income by Region", y = "Dollars ($)", x = NULL) +
+  theme(legend.position = "none")
+
+# ---- Plot 2: Race / Ethnicity ----
+summary_all |>
+  dplyr::select(region, pct_white, pct_black, pct_asian, pct_hispanic) |>
+  pivot_longer(-region, names_to = "race", values_to = "value") |>
+  mutate(race = recode(race, !!!pretty_names)) |>
+  ggplot(aes(x = region, y = value, fill = region)) +
+  geom_col(position = position_dodge()) +
+  geom_text(aes(label = percent(value, accuracy = 1)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 4) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_manual(values = colors) +
+  facet_wrap(~ race) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Racial and Ethnic Composition", y = "Percent of Population", x = NULL) +
+  theme(legend.position = "none")
+
+# ---- Plot 3: Educational Attainment ----
+summary_all |>
+  dplyr::select(region, pct_at_least_hs, pct_at_least_college) |>
+  pivot_longer(-region, names_to = "education", values_to = "value") |>
+  mutate(education = recode(education, !!!pretty_names)) |>
+  ggplot(aes(x = region, y = value, fill = region)) +
+  geom_col(position = position_dodge()) +
+  geom_text(aes(label = percent(value, accuracy = 1)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 4) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_manual(values = colors) +
+  facet_wrap(~ education) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Educational Attainment (Age 25+)", y = "Percent of Adults", x = NULL) +
+  theme(legend.position = "none")
+
+# ---- Plot 4: Housing Costs ----
+summary_all |>
+  dplyr::select(region, median_home_value, median_rent) |>
+  pivot_longer(-region, names_to = "type", values_to = "value") |>
+  mutate(type = recode(type, !!!pretty_names)) |>
+  ggplot(aes(x = region, y = value, fill = region)) +
+  geom_col(position = position_dodge()) +
+  geom_text(aes(label = dollar(value)),
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 4) +
+  scale_y_continuous(labels = dollar) +
+  scale_fill_manual(values = colors) +
+  facet_wrap(~ type) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Median Home Value and Rent", y = "Dollars ($)", x = NULL) +
+  theme(legend.position = "none")
+
+# ---- Plot 5: Housing Tenure ----
+summary_all |>
+  dplyr::select(region, pct_owner_occupied, pct_renter_occupied) |>
+  pivot_longer(-region, names_to = "tenure", values_to = "value") |>
+  mutate(tenure = recode(tenure, !!!pretty_names)) |>
+  ggplot(aes(x = region, y = value, fill = region)) +
+  geom_col(position = position_dodge()) +
+  geom_text(aes(label = percent(value, accuracy = 1)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 4) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_manual(values = colors) +
+  facet_wrap(~ tenure) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Housing Tenure by Region", y = "Percent of Households", x = NULL) +
+  theme(legend.position = "none")
+
+# # ---- Plot 6: Full Comparison (Faceted) ----
+# summary_all |>
+#   pivot_longer(-region, names_to = "variable", values_to = "value") |>
+#   mutate(
+#     variable = recode(variable, !!!pretty_names),
+#     label = case_when(
+#       grepl("Percent", variable) ~ percent(value, accuracy = 1),
+#       grepl("Income|Rent|Value", variable) ~ dollar(value),
+#       TRUE ~ comma(value)
+#     )
+#   ) |>
+#   ggplot(aes(x = region, y = value, fill = region)) +
+#   geom_col(position = "dodge") +
+#   geom_text(aes(label = label), position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+#   scale_fill_manual(values = colors) +
+#   facet_wrap(~ variable, scales = "free_y") +
+#   theme_minimal(base_size = 13) +
+#   labs(title = "ACS Comparison Across Holyoke, Chelsea, and Massachusetts", x = NULL, y = NULL) +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+
+```
+
+
+
