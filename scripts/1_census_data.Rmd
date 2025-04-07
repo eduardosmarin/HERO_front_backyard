@@ -67,6 +67,7 @@ packs <-c(
           , 'leaflet' #for heatmaps and more unique, customizable maps
           , 'leaflet.extras'
           , 'tidytext'
+          , 'scales'
           )     
 
 #2. If the packages in 'packs' are not already installed, install them
@@ -119,7 +120,7 @@ my_vars <- c(  'median_household_income' = 'B19013_001'
             )
 
 # 3. Loading the CBGs
-cbg_massachusetts<-
+cbg_massachusetts <-
   tidycensus::get_acs(
       geography = 'block group'
     , state = 'Massachusetts'
@@ -141,16 +142,16 @@ cbg_massachusetts<-
 
 # 4. Reading the geopackages
 holyoke_boundary <-
-  st_read("/Users/eduardosmarin/Desktop/EVST 496 Senior Research Project/03 EVST 496 Data/B Input Data/Holyoke/holyoke_boundary.gpkg") |>
+  st_read("./input_data/Holyoke/holyoke_boundary.gpkg") |>
   st_transform(st_crs(cbg_massachusetts))
 
 chelsea_boundary <-
-  st_read("/Users/eduardosmarin/Desktop/EVST 496 Senior Research Project/03 EVST 496 Data/B Input Data/Chelsea/chelsea_boundary.gpkg") |>
+  st_read("./input_data/Chelsea/chelsea_boundary.gpkg") |>
   st_transform(st_crs(cbg_massachusetts))
 
-
-# . Select block groups that fall within each boundary
-cbgs_chelsea <- cbg_massachusetts[
+# 5. Select block groups that fall within each boundary
+cbgs_chelsea <- 
+  cbg_massachusetts[
   st_intersects(cbg_massachusetts, chelsea_boundary, sparse = FALSE)[, 1],
 ] |>
   filter(
@@ -175,8 +176,6 @@ cbgs_holyoke <-
 ```
 
 ```{r echo=FALSE}
-library(scales)
-
 # Define custom color palette
 colors <- c("Holyoke" = "#66c2cc", "Chelsea" = "#f89c74", "Massachusetts" = "#f6cf71")
 
