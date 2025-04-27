@@ -130,7 +130,7 @@ cbg_massachusetts <-
     , output = 'wide'
     , moe_level = 95
     ) |>
-    st_transform(crs = st_crs(4326)) |>
+    st_transform(crs = st_crs(4326)) |> # DHL: why transform to this projection? Any issues with 4269? Just curious
     dplyr::select(-ends_with("M")) |> 
     rename_with(~ gsub("E$", "", .x), ends_with("E")) |>  
     rename(NAME = NAM) |>
@@ -151,10 +151,14 @@ chelsea_boundary <-
 
 # 5. Select block groups that fall within each boundary
 cbgs_chelsea <- 
+  # this is basically clipping the block groups, you may not want to modify the edges.
   cbg_massachusetts[
-  st_intersects(cbg_massachusetts, chelsea_boundary, sparse = FALSE)[, 1],
+  st_intersects(cbg_massachusetts, chelsea_boundary, sparse = FALSE)[, 1], # DHL see "st_intersection" not st_intersects
 ] |>
   filter(
+    # DHL nice job! Antother way to do this is with %nin% the Not IN operator. 
+    # # custom function for "Not In"
+    # `%nin%` <- Negate(`%in%`) # this can be defined in the first chunk. Just expanding your vocabulary
     !GEOID %in% c(
       "250173424023", "250173424024", "250173426002", "250173421014",
       "250173421013", "250251701023", "250251701013", "250251706012"
@@ -173,6 +177,7 @@ cbgs_holyoke <-
     "250138125004", "250158224012", "250158214004"
   ))
 
+# DHL I would consider some scruitinzing of these new polygons. Don't just accept them as what you wanted to do. Check for errors
 ```
 
 ```{r echo=FALSE}
@@ -196,12 +201,14 @@ pretty_names <- c(
 )
 
 # Helper to summarize a region
+# DHL consider defining all function in the top chunk. That's just a style thing.
 summarize_region <- function(data, region_name) {
   data |>
     st_drop_geometry() |>
     summarise(
       region = region_name,
       median_income = weighted.mean(median_household_income, total_population, na.rm = TRUE),
+      # DHL as noted before, I'm really not sure weighted.mean does what you seek here. Lets discuss
       median_age = weighted.mean(median_age, total_population, na.rm = TRUE),
       pct_white = sum(white_alone, na.rm = TRUE) / sum(total_population, na.rm = TRUE),
       pct_black = sum(black_alone, na.rm = TRUE) / sum(total_population, na.rm = TRUE),
@@ -220,7 +227,7 @@ summarize_region <- function(data, region_name) {
 summary_holyoke <- summarize_region(cbgs_holyoke, "Holyoke")
 summary_chelsea <- summarize_region(cbgs_chelsea, "Chelsea")
 summary_mass <- summarize_region(cbg_massachusetts, "Massachusetts")
-summary_all <- bind_rows(summary_holyoke, summary_chelsea, summary_mass)
+summary_all <- bind_rows(summary_holyoke, summary_chelsea, summary_mass) # SLICK well done.
 
 # ---- Plot 1: Median Household Income ----
 summary_all |>

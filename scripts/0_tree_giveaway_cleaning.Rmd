@@ -98,6 +98,20 @@ chelsea_giveaways |> #All the the duplicates appear to be from TreID_1 that are 
 
 # 2. Looking at unique values of certain categories
 ### a) Finding more general categories
+
+#DHL here's another way to do that
+chelsea_giveaways |>
+  # st_drop_geometry() |> # not needed here but from the example I had already
+  # select(-id) |>        # same, 
+  mutate_if(is.character, as.factor) |> # factorize the characters
+  select_if(is.factor) |>               # select the factor
+  map(~tabyl(.)) |>                     # cross tabulate them all
+  bind_rows(.id = 'var')                # combine and retain
+
+# DATEPLANTE shoudl be a date, not a character or factor
+
+
+
 sort(unique(chelsea_giveaways$GGC_PUB)) #GGC_Pub shows public or private
 sort(unique(chelsea_giveaways$REPLACE))
 sort(unique(chelsea_giveaways$COMMENT))
@@ -626,7 +640,7 @@ broadleaf_conifer_table <-
 # 2a. Creating the iTree Final Table
 pre_i_tree_table_v1 <- 
   read_excel(
-    "./input_data/General/Create_iTree_spp_codes_from_inventory_list.xls.xlsx"
+    "./input_data/General/Create_iTree_spp_codes_from_inventory_list.xls.xlsx" # DHL that's a weird file extension, is that right?
   , sheet = "i-Tree Species List"
   ) |>
  mutate( #This is to make it mergeable
@@ -644,9 +658,9 @@ pre_i_tree_table_v1 <-
 
 # 2b. Checking the unmatched species
 matched_species <- #Finding those matched
-  pre_hero_tree_giveaway$Species %in% pre_i_tree_table_v1$Species
+  pre_hero_tree_giveaway$Species %in% pre_i_tree_table_v1$Species # DHL does not run.
 
-#Finding those unmatched
+#Finding those unmatched # DHL use %nin% or dplyr::anti_join or tidylog::anti_join for clarity and sanity instead.
   unique(pre_hero_tree_giveaway$Species[!(pre_hero_tree_giveaway$Species %in% pre_i_tree_table_v1$Species)])
   
 # 2c. Creating the index table and reading it in
@@ -682,7 +696,7 @@ hero_tree_giveaway <-
     Year_Planted = year(Date_Planted),
     Month = month(Date_Planted),
     Season_Planted = case_when(
-      Month %in% c(3, 4, 5, 6, 7) ~ "SPRING" #DL: Should we include July in Spring?
+      Month %in% c(3, 4, 5, 6, 7) ~ "SPRING" #DL: Should we include July in Spring? # DHL ask John Rogan
     , Month %in% c(8, 9, 10, 11) ~ "FALL" #DL: Should we include August in Fall?
     , TRUE ~ NA_character_      
     )
@@ -706,6 +720,7 @@ hero_tree_giveaway <-
           , Site_Type_2014_2023 == "SP" ~ "Sidewalk Planting Strip"
           , TRUE ~ Site_Type_2014_2023)
        , Land_Use_2014_2023 = case_when(
+         # DHL case_when works here, a small table and a left_join can also accomplish this. Tomatoe Tomatoe
             Land_Use_2014_2023 == "MFR"   ~ "Multi-Family Residential"               
           , Land_Use_2014_2023 == "SFR-D" ~ "Single-Family Detached"               
           , Land_Use_2014_2023 == "SFR-A" ~ "Single-Family Attached"               
@@ -795,5 +810,64 @@ hero_tree_giveaway |>
 # direct reverse geocoded so you do not have to go through that process; I commented it out momentarily.
 check_hero_tree_giveaway <-
 st_read("./input_data/General/hero_tree_giveaway_2025-04-27.gpkg")
+# DHL: no changes suggested here, but that would have been nice to know up top :-)
+# DHL: no changes suggested here, but you seem to have a lot folders called "General". Be careful you may fool yourself
+
+# missingness
+check_hero_tree_giveaway  |> 
+ map(~sum(is.na(.))) |>
+ bind_rows() |>
+ t()
+
+# categorical / text
+check_hero_tree_giveaway |> 
+  st_drop_geometry() |>
+  tidylog::select(-Address) |> 
+  mutate_if(is.character, as.factor) |>
+  select_if(is.factor) |>
+  map(~tabyl(.)) |>
+  bind_rows(.id = 'var') |> View()
+
+check_hero_tree_giveaway |> mapview(zcol = 'Year_Planted')
+
+check_hero_tree_giveaway |> 
+  st_drop_geometry() |> 
+  tabyl(Site_Type)
+
+check_hero_tree_giveaway |> 
+  st_drop_geometry() |> 
+  group_by(Site_Type, City) |> 
+  count() |> 
+  ggplot(aes(n, Site_Type)) +
+  geom_col() +
+  facet_wrap(~City) +
+  theme_bw(16) +
+  NULL
+
+check_hero_tree_giveaway |> 
+  st_drop_geometry() |> 
+  tabyl(Site_Type, City) |> 
+  adorn_percentages() |> 
+  pivot_longer(-Site_Type) |> 
+  ggplot(aes(value, Site_Type)) +
+  geom_col() +
+  facet_wrap(~name) +
+  theme_bw(16) +
+  NULL
+ 
+# eh not really what I was going for.
+check_hero_tree_giveaway |> 
+  st_drop_geometry() |> 
+  filter(Site_Type == 'Front Yard' | Site_Type == 'Backyard') |> 
+  tabyl(Year_Planted, City, Site_Type) |> 
+  adorn_percentages() |> 
+  bind_rows(.id = "Site_Type") |> 
+  pivot_longer(-c(Site_Type, Year_Planted)) |> 
+  ggplot(aes(value, Site_Type, fill = Year_Planted)) +
+  geom_col() +
+  facet_wrap(~name) +
+  theme_bw(16) +
+  NULL
+
 ```
 
