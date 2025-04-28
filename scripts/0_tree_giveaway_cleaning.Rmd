@@ -21,6 +21,7 @@ editor_options:
     wrap: 72
 ---
 
+# 0. Loading the packages
 ```{r Loading Packages, message=FALSE, include=FALSE}
 # 1. Loading all packages
 packs <-c(
