@@ -75,11 +75,11 @@ options(tigris_use_cache = TRUE)
 ```{r Reading the Chelsea, MA & Holyoke, MA data}
 # 1. Working with the Chelsea giveaway data
 chelsea_giveaways <-
-  read_csv("./input_data/Chelsea/Tree Giveaways/2017CorrectedChelseaAllTreesComplete.csv")
+  read_csv("input_data/Chelsea/Tree Giveaways/2017CorrectedChelseaAllTreesComplete.csv")
 
 # 2. Working with the Holyoke giveaway data
 holyoke_giveaways <-
-  read_csv("./input_data/Holyoke/Tree Giveaways/holy_random_clean_fixed.csv") # DL: There appears to be no address information
+  read_csv("input_data/Holyoke/Tree Giveaways/holy_random_clean_fixed.csv") # DL: There appears to be no address information
 
 ```
 
@@ -641,8 +641,8 @@ broadleaf_conifer_table <-
 # 2a. Creating the iTree Final Table
 pre_i_tree_table_v1 <- 
   read_excel(
-    "./input_data/General/Create_iTree_spp_codes_from_inventory_list.xls.xlsx" # DHL that's a weird file extension, is that right?
-  , sheet = "i-Tree Species List"
+    "input_data/General/Create_iTree_spp_codes_from_inventory_list.xls.xlsx"
+    , sheet = "i-Tree Species List"
   ) |>
  mutate( #This is to make it mergeable
     Species = str_c(`Genus Name`, `Species Name`, sep = " "),
@@ -657,6 +657,7 @@ pre_i_tree_table_v1 <-
        , Growth_Rate        = `Growth Rate`
        )
 
+# FIXM
 # 2b. Checking the unmatched species
 matched_species <- #Finding those matched
   pre_hero_tree_giveaway$Species %in% pre_i_tree_table_v1$Species # DHL does not run.
@@ -666,7 +667,7 @@ matched_species <- #Finding those matched
   
 # 2c. Creating the index table and reading it in
 pre_i_tree_table_v2 <- 
-  read_excel("./input_data/General/i_Tree_Appendix.xls.xlsx"
+  read_excel("input_data/General/i_Tree_Appendix.xls.xlsx"
            , sheet = "i-Tree Species List"
            , n_max = 19) |>
   dplyr::select(1:8)
@@ -810,7 +811,7 @@ hero_tree_giveaway |>
 # 2. DL: If you want to do double checks. I suggest downloading mine which has the 
 # direct reverse geocoded so you do not have to go through that process; I commented it out momentarily.
 check_hero_tree_giveaway <-
-st_read("./input_data/General/hero_tree_giveaway_2025-04-27.gpkg")
+  st_read("input_data/General/hero_tree_giveaway_2025-04-27.gpkg")
 # DHL: no changes suggested here, but that would have been nice to know up top :-)
 # DHL: no changes suggested here, but you seem to have a lot folders called "General". Be careful you may fool yourself
 
