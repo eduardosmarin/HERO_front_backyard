@@ -206,6 +206,7 @@ Another way to do what it was earlier ^ is through a survival analysis
 # It is called time to event survival analysis. This is important. We have to switch the code to dead 1 being an event while no event (aka surviving) remains 0. 
 
 # What the survivor anlaysis is saying, like a logistic regression but accounting for time and we can put in multiple predictors. Cogs proportional hazard model
+
 ```
 
 

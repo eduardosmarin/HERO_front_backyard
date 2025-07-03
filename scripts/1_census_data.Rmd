@@ -222,6 +222,7 @@ library(dplyr)
 library(sf)
 library(ggspatial)
 
+
 # Filter each city
 chelsea_trees <- hero_tree_giveaway |>
   filter(City == "CHELSEA") |>
