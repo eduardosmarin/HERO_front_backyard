@@ -71,6 +71,12 @@ vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE,
 
 # Right here, there will be some double checks, missingness, some quick summaries (sparkling clean dataset with only the things I need)
 
+# checks missing
+ |> 
+ map(~sum(is.na(.))) |>
+ bind_rows() |>
+ t()
+ 
 ```
 
 # 2. Q1 Difference in Survivorship.
@@ -81,6 +87,15 @@ vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE,
 
 # - We want to only look at this 25% that we have both T1 and T2
 # - 1. Going to do a Tabyl on status and time (Alive vs. Dead)
+
+# might be the 
+|> 
+tabyl(, ) |> 
+adorn_totals(where = "both") |>
+adorn_percentages() |>
+adorn_pct_formatting() |>
+adorn_ns(position = "front")
+
 
 ```
 
@@ -198,9 +213,61 @@ there truly a difference3
 
 # ^ this is a mixed effect approach
 
+# Another way to do what it was earlier ^ is through a survival analysis
+library(survival) 
+surv <- 
+  test_long |> 
+  mutate(
+    status_bin =
+      case_when(
+          status == 'Alive' ~ 1
+        , status == 'Removed' | status == 'Statnding Dead' |  status == 'Stump' ~ 0
+        , TRUE ~ NA
+        )
+    # , time = paste0('20', str_remove_all(name, 'M_'))
+    , time = str_remove_all(name, 'M_')
+    ) |> 
+  drop_na(status_bin) |> 
+  type_convert() |> 
+  select(id = NewTreeID, city = City, status_bin, time)
+
+surv |> 
+  janitor::tabyl(city, status_bin, time) |> 
+  janitor::adorn_totals('col') |> 
+  janitor::adorn_percentages() |> 
+  janitor::adorn_pct_formatting() |> 
+  bind_rows(.id = 'time')
+
+ggsurvfit::survfit2(Surv(time, status_bin) ~ 1, data = surv)
+
+
+mod |>
+  gtsummary::tbl_survfit(
+    times = c(365.25, 365.25*2, 365.25*5)
+    , label_header = '**{time} Days**'
+  )
+
+mod |> 
+  ggsurvfit::ggsurvfit() + 
+  geom_vline(xintercept = 365.25  , color = 'black') +
+  geom_vline(xintercept = 365.25*2, color = 'black') +
+  geom_vline(xintercept = 365.25*5, color = 'black') +
+  ggsurvfit::add_confidence_interval() + 
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  ggsurvfit::add_quantile() +
+  ggsurvfit::scale_ggsurvfit(y_scales = list(breaks = seq(0, 100, by = .10)
+                                             # , limits = c(.6, 1)
+                                             )
+  ) +
+  labs(x = 'Time in Days'
+       , title = 'Get used to this graph') +
+  # ylim(.6, 1) +
+  NULL
+
+
 ```
 
-Another way to do what it was earlier ^ is through a survival analysis
 
 ```{r}
 # It is called time to event survival analysis. This is important. We have to switch the code to dead 1 being an event while no event (aka surviving) remains 0. 
