@@ -1,0 +1,566 @@
+---
+title: "EVST 496 Census Data"
+subtitle: "Census Comparison of Holyoke, MA and Chelsea, MA and Appending"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+
+# 0. Loading the packages
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Loading all packages
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          # , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'tidycensus' # tidy census package
+          , 'tidygeocoder' # geo coding
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          , 'shiny'
+          , 'leafsync'  # linked maps
+          , 'RColorBrewer'
+          , 'DT'
+          , 'openxlsx'
+          , 'mapdeck'
+          , 'biscale' #used with ggplot to make bivariate maps
+          , 'cowplot' #used to make more aesthetic ggplot visuals
+          , 'ggspatial' #creates a basemap for your ggplots
+          , 'classInt' #find me breaks without doing manualcalculations
+          , 'rgl' #needs for rayshader
+          , 'rayshader' #good data viz for 3d bar graphs
+          , 'leaflet' #for heatmaps and more unique, customizable maps
+          , 'leaflet.extras'
+          , 'tidytext'
+          , 'scales'
+          , 'ggspatial'
+          , 'ggrepel'
+          )     
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+
+# 3. Items for tidy census
+census_api_key('58fc555c77c229747ade7d9fe50e7c71297cf91a', install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+options(tigris_use_cache = TRUE)
+```
+
+# 1. Downloading the US Census Bureau ACS Data and Filtering out for Holyoke, MA & Chelsea, MA 
+```{r Downloading US Census and Organizing Holyoke, MA & Chelsea, MA, echo=FALSE, message=FALSE}
+# # 1. Loading the list of variables from ACS
+# variables_acs <- 
+#   tidycensus::load_variables('acs5', year = 2021) |>
+#   filter(geography == "block group")
+# 
+# # 2. Loading the list of variables from ACS 
+# my_vars <-  c(  #DL: For the variables, should I calculate percentage for aspects like renter and owner occupied; may need to be weighted since its estimated population is not based on the total population but something separate
+#          'median_household_income' = 'B19013_001'
+#        , 'total_population' = 'B01003_001'
+#        , 'households' = 'B11001_001'
+#        , 'white_alone' = 'B03002_003'
+#        , 'black_alone' = 'B03002_004'
+#        , 'american_indian_alone' = 'B03002_005'
+#        , 'asian_alone' = 'B03002_006'
+#        , 'native_hawaiian_alone' = 'B03002_007'
+#        , 'other_alone' = 'B03002_008'
+#        , 'two_or_more_alone' = 'B03002_009'
+#        , 'hispanic_alone' = 'B03002_012'
+#        , 'labor_force_total' = 'B23025_003'
+#        , 'unemployed_total' = 'B23025_005'
+#        , 'median_age' = 'B01002_001'
+#        , 'total_population_over_25' = 'B15003_001'
+#        , 'ed_hs_degree' = 'B15003_017'
+#        , 'ed_ged_degree' = 'B15003_018'
+#        , 'ed_college_less_1_year' = 'B15003_019'
+#        , 'ed_college_more_1_year' = 'B15003_020'
+#        , 'ed_associate_degree' = 'B15003_021'
+#        , 'ed_plus_bachelor_degree' = 'B15003_022'
+#        , 'ed_plus_master_degree' = 'B15003_023'
+#        , 'ed_plus_professional_degree' = 'B15003_024'
+#        , 'ed_plus_doctorate_degree' = 'B15003_025'
+#        , 'median_gross_rent' = 'B25064_001'
+#        , 'median_home_value' = 'B25077_001'
+#        , 'owner_occupied' = 'B25003_002'
+#        , 'renter_occupied' = 'B25003_003'
+#             )
+# 
+# # 3. Loading the CBGs
+# cbg_massachusetts <-
+#   tidycensus::get_acs(
+#       geography = 'block group'
+#     , state = 'Massachusetts'
+#     , variables = my_vars
+#     , year = 2021
+#     , geometry = TRUE
+#     , output = 'wide'
+#     , moe_level = 95
+#     ) |>
+#     st_transform(crs = st_crs(4326)) |> # DHL: why transform to this projection? Any issues with 4269? Just curious | EM: I think since mapview likes 4326 better, but I might be mistakened
+#     dplyr::select(-ends_with("M")) |> 
+#     rename_with(~ gsub("E$", "", .x), ends_with("E")) |>  
+#     rename(NAME = NAM) |>
+#     separate(NAME, into = c("Block", "Census Tract", "County", "State"), sep = ", ") |> #Added this for more complexity and        clarity
+#     mutate(
+#       pct_at_least_hs = (rowSums(across(starts_with("ed_"))))/total_population_over_25, #This gets percentage
+#       pct_at_least_college = (rowSums(across(starts_with("ed_plus"))))/total_population_over_25 #This gets percentage
+#     ) |>
+#     dplyr::select(-starts_with("ed_")) 
+# 
+# # write out
+# cbg_massachusetts |> 
+#   st_write(paste0('input_data/cbg_massachusetts_', Sys.Date(), '.gpkg'))
+
+# read in 
+cbg_massachusetts <- st_read('input_data/cbg_massachusetts_2025-04-28.gpkg')
+
+# 4. Reading the geopackages
+holyoke_boundary <-
+  st_read("./input_data/Holyoke/Boundaries/holyoke_boundary.gpkg") |>
+  st_transform(st_crs(cbg_massachusetts))
+
+chelsea_boundary <-
+  st_read("./input_data/Chelsea/Boundaries/chelsea_boundary.gpkg") |>
+  st_transform(st_crs(cbg_massachusetts))
+
+# 5. Select block groups that fall within each boundary
+## a) Finding CBGs for Chelsea
+# cbgs_chelsea <- 
+#   # this is basically clipping the block groups, you may not want to modify the edges.
+#   cbg_massachusetts[
+#   st_intersects(cbg_massachusetts, chelsea_boundary, sparse = FALSE)[, 1], #DL: For some reason, this does not work with st_intersection
+# ] |>
+#   filter(
+#     # DHL nice job! Antother way to do this is with %nin% the Not IN operator. 
+#     # # custom function for "Not In"
+#     # `%nin%` <- Negate(`%in%`) # this can be defined in the first chunk. Just expanding your vocabulary
+#     !GEOID %in% c(
+#       "250173424023", "250173424024", "250173426002", "250173421014",
+#       "250173421013", "250251701023", "250251701013", "250251706012"
+#     )
+#   )
+
+cbgs_chelsea <-
+  cbg_massachusetts |> 
+  filter(str_detect(GEOID, '25025160')) |> 
+  st_intersection(chelsea_boundary)
+
+# mapview(chelsea_boundary, alpha.regions = 0, color = "black", lwd = 5) + mapview(cbg_massachusetts)
+mapview(chelsea_boundary, alpha.regions = 0, color = "black", lwd = 5) + mapview(cbgs_chelsea)
+
+## b) Finding CBGs for Holyoke
+cbgs_holyoke <- 
+  cbg_massachusetts |> 
+  filter(str_detect(GEOID, '25013812002') | str_detect(GEOID, '250138119') | str_detect(GEOID, '250138121') |
+           str_detect(GEOID, '250138117') | str_detect(GEOID, '250138120') | str_detect(GEOID, '25013811800') |
+           str_detect(GEOID, '250138115') | str_detect(GEOID, '250138116') | str_detect(GEOID, '25013811400')
+         ) |> 
+   st_intersection(holyoke_boundary)
+
+mapview(holyoke_boundary, alpha.regions = 0, color = "black", lwd = 5) + mapview(cbgs_holyoke)
+
+# cbgs_holyoke <- 
+#   cbg_massachusetts[
+#   st_intersects(cbg_massachusetts, holyoke_boundary, sparse = FALSE)[, 1],
+# ] |>
+#   filter(!GEOID %in% c(
+#     "250138122021", "250138111023", "250138111022", "250138111021",
+#     "250138111012", "250138111024", "250138111011", "250138113013",
+#     "250158211012", "250158211014", "250158213001", "250158225004",
+#     "250158211012", "250158213003", "250158223001", "250158225004",
+#     "250138125004", "250158224012", "250158214004"
+#   ))
+# 
+# # DHL I would consider some scruitinzing of these new polygons. Don't just accept them as what you wanted to do. Check for errors | EM: I think it is okay, mhm, seems but not sure.
+```
+
+# 2. Appending the Data to the HERO Spreadsheet
+```{r}
+# 1. Reading in the HERO Tree Giveaway Data from 0_tree_giveaway_cleaning.Rmd
+hero_tree_giveaway <-
+  st_read("/Users/eduardosmarin/Desktop/EVST 496 Senior Research Project/03 Data/HERO Front-Backyard/input_data/General/hero_tree_giveaway_2025-04-27.gpkg")
+```
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(sf)
+library(ggspatial)
+
+# Filter each city
+chelsea_trees <- hero_tree_giveaway |>
+  filter(City == "CHELSEA") |>
+  st_as_sf()
+
+holyoke_trees <- hero_tree_giveaway |>
+  filter(City == "HOLYOKE") |>
+  st_as_sf()
+
+# Add survivorship column for color
+chelsea_trees <- chelsea_trees |>
+  mutate(Survivorship = ifelse(Mortality == "Alive", "Alive", "Not Alive"))
+
+holyoke_trees <- holyoke_trees |>
+  mutate(Survivorship = ifelse(Mortality == "Alive", "Alive", "Not Alive"))
+
+# Base map for Chelsea
+plot_chelsea <- ggplot() +
+  annotation_map_tile(type = "cartolight", zoomin = -1) +
+  geom_sf(data = chelsea_trees, aes(color = Survivorship), size = 1.2, show.legend = TRUE) +
+  scale_color_manual(values = c("Alive" = "darkgreen", "Not Alive" = "red")) +
+  coord_sf() +
+  labs(title = "Chelsea Tree Giveaway Locations") +
+  theme_minimal(base_family = "Times") +
+  theme(plot.title = element_text(face = "bold", size = 14),
+        panel.grid = element_blank())
+
+# Base map for Holyoke
+plot_holyoke <- ggplot() +
+  annotation_map_tile(type = "cartolight", zoomin = -1) +
+  geom_sf(data = holyoke_trees, aes(color = Survivorship), size = 1.2, show.legend = TRUE) +
+  scale_color_manual(values = c("Alive" = "darkgreen", "Not Alive" = "red")) +
+  coord_sf() +
+  labs(title = "Holyoke Tree Giveaway Locations") +
+  theme_minimal(base_family = "Times") +
+  theme(plot.title = element_text(face = "bold", size = 14),
+        panel.grid = element_blank())
+
+# Combine plots side by side
+library(patchwork)
+plot_holyoke + plot_chelsea
+
+
+
+```
+
+
+```{r}
+# 2. Appending the data to the Massachusetts CBGs found earlier
+hero_tree_giveaway_dem <-
+  hero_tree_giveaway |>
+  st_join(cbg_massachusetts)
+
+library(ggplot2)
+
+# 3. Maps do not seem that interesting/varied; maybe because too granular, not sure next best options...
+ggplot() +
+  geom_sf(data = cbgs_holyoke, aes(fill = median_household_income)) +
+  scale_fill_viridis_c(option = "plasma") +
+  theme_minimal() +
+  labs(title = "Median Household Income in Holyoke, MA")
+
+ggsave("/Users/eduardosmarin/Desktop/holyoke_median_household_income.svg", width = 8, height = 6, dpi = 300)
+
+ggplot() +
+  geom_sf(data = cbgs_chelsea, aes(fill = median_household_income)) +
+  scale_fill_viridis_c(option = "plasma") +
+  theme_minimal() +
+  labs(title = "Median Household Income in Chelsea, MA") 
+
+ggsave("/Users/eduardosmarin/Desktop/chelsea_median_household_income.svg", width = 6, height = 6, dpi = 300)
+
+
+
+ggplot() +
+  geom_sf(data = cbgs_chelsea, aes(fill = median_household_income)) +
+  geom_sf(data =hero_tree_giveaway_dem |> filter(City == "CHELSEA"), color = "darkgreen", size = 0.5) +
+  scale_fill_viridis_c(option = "plasma") +
+  theme_minimal() +
+  labs(title = "HERO Tree Giveaway Points over Median Household Income")
+
+```
+
+# 3. Creating visuals for the 20 Quality Pages (IGNORE for FUTURE)
+```{r}
+# 1. Creating a map of Holyoke, Chelsea, MA
+chelsea_boundary <- 
+  chelsea_boundary |>
+  dplyr::filter(sf::st_is_valid(.) & !sf::st_is_empty(.)) #Unsure but ChatGPT gave me this to fix my invalid frames for the bbox
+
+holyoke_boundary <- 
+  holyoke_boundary |>
+  dplyr::filter(sf::st_is_valid(.) & !sf::st_is_empty(.)) #Unsure but ChatGPT gave me this to fix my invalid frames for the bbox
+
+# 2. Creating the function to create the shapefile of the bboxes, since the built in wasn't working
+bbox_to_sf_polygon <- 
+  function(bbox) {
+  sf::st_polygon(list(matrix(c(
+    bbox["xmin"], bbox["ymin"],
+    bbox["xmax"], bbox["ymin"],
+    bbox["xmax"], bbox["ymax"],
+    bbox["xmin"], bbox["ymax"],
+    bbox["xmin"], bbox["ymin"]
+  ), ncol = 2, byrow = TRUE))) |>
+    sf::st_sfc(crs = sf::st_crs(chelsea_boundary)) #from ChatGPT—checked and seems to do what I want
+}
+
+# 3. Creating the boxes
+chelsea_box <- 
+  bbox_to_sf_polygon(sf::st_bbox(chelsea_boundary))
+
+holyoke_box <- 
+  bbox_to_sf_polygon(sf::st_bbox(holyoke_boundary))
+
+# 4. Creating the map itself
+ggplot() +
+  geom_sf(data = cbg_massachusetts, fill = "gray90", color = "white", size = 0.1) +
+  geom_sf(data = chelsea_box, fill = NA, color = "blue", size = 1.2) +
+  geom_sf(data = holyoke_box, fill = NA, color = "red", size = 1.2) +
+  geom_sf(data = chelsea_boundary, fill = "blue", alpha = 0.3) +
+  geom_sf(data = holyoke_boundary, fill = "red", alpha = 0.3) +
+  theme_minimal() +
+  labs(title = "Massachusetts: Highlighting Chelsea and Holyoke") +
+    annotation_scale(location = "bl", bar_cols = c("gray60", "white"),
+                   line_width = 0.8, height = unit(0.2, "cm"), text_cex = 0.8) +
+  NULL
+
+ggsave("/Users/eduardosmarin/Desktop/chelsea_holyoke_massachusetts_map.svg", width = 8, height = 6, dpi = 300)
+
+
+```
+
+
+
+
+# 2. Creating a Combined Dataframe to Create Comparison Graphs for MA, Holyoke, MA, and Chelsea, MA
+```{r echo=FALSE}
+# 1. Creating the function for the 
+summarize_region <- function(data, region_name) {
+  data |>
+    st_drop_geometry() |>
+    mutate(
+      weighted_age = median_age * total_population,
+      weighted_hs = pct_at_least_hs * total_population_over_25,
+      weighted_college = pct_at_least_college * total_population_over_25
+    ) |>
+    summarise(
+      region = region_name,
+      total_population = sum(total_population, na.rm = TRUE),
+      median_income = mean(median_household_income, na.rm = TRUE),
+      # DHL as noted before, I'm really not sure weighted.mean does what you seek here. Lets discuss; EM: you are right, does not make any sense to have weighted.maen, especially since these variables don't needed to be weighted by population
+      median_age = sum(weighted_age, na.rm = TRUE) / sum(total_population, na.rm = TRUE),
+      pct_white = sum(white_alone, na.rm = TRUE) / total_population,
+      pct_black = sum(black_alone, na.rm = TRUE) / total_population,
+      pct_asian = sum(asian_alone, na.rm = TRUE) / total_population,
+      pct_hispanic = sum(hispanic_alone, na.rm = TRUE) / total_population,
+      # FIXME make this more like race.
+      pct_at_least_hs = sum(weighted_hs, na.rm = TRUE) / sum(total_population_over_25, na.rm = TRUE),
+      pct_at_least_college = sum(weighted_college, na.rm = TRUE) / sum(total_population_over_25, na.rm = TRUE),
+      median_rent = mean(median_gross_rent, na.rm = TRUE),
+      median_home_value = mean(median_home_value, na.rm = TRUE),
+      pct_owner_occupied = sum(owner_occupied, na.rm = TRUE) / sum(owner_occupied + renter_occupied, na.rm = TRUE),
+      pct_renter_occupied = sum(renter_occupied, na.rm = TRUE) / sum(owner_occupied + renter_occupied, na.rm = TRUE)
+    )
+}
+
+# 2. Creating the summary statisitics
+df_demographic_holyoke <-
+  cbgs_holyoke |>
+  summarize_region("Holyoke")
+
+df_demographic_chelsea <- 
+  cbgs_chelsea |>
+  summarize_region("Chelsea")
+
+df_demographic_masaachusetts <- 
+  cbg_massachusetts |>
+  summarize_region("Massachusetts")
+
+df_demographic_all <-
+   bind_rows(df_demographic_holyoke, df_demographic_chelsea, df_demographic_masaachusetts) # SLICK well done.
+```
+
+
+```{r echo=FALSE}
+
+# Define custom color palette
+colors <- c("Holyoke" = "#0F4D92", "Chelsea" = "#F48734", "Massachusetts" = "#E5E5E5")
+
+# Clean variable labels for plotting
+pretty_names <- c(
+  median_income = "Median Household Income",
+  median_age = "Median Age",
+  pct_white = "Percent White (Non-Hispanic)",
+  pct_black = "Percent Black or African American",
+  pct_asian = "Percent Asian",
+  pct_hispanic = "Percent Hispanic or Latino",
+  pct_at_least_hs = "Percent with High School Education or Higher",
+  pct_at_least_college = "Percent with Bachelor’s Degree or Higher",
+  median_home_value = "Median Home Value",
+  median_rent = "Median Gross Rent",
+  pct_owner_occupied = "Percent Owner-Occupied Housing",
+  pct_renter_occupied = "Percent Renter-Occupied Housing"
+)
+
+
+# ---- Plot 1: Median Household Income ----
+df_demographic_all |>
+  mutate(region = factor(region, levels = c("Holyoke", "Chelsea", "Massachusetts"))) |>
+  ggplot(aes(x = region, y = median_income, fill = region)) +
+  geom_col() +
+  geom_text(aes(label = dollar(median_income)), vjust = -0.5, size = 4) +
+  scale_fill_manual(values = colors) +
+  scale_y_continuous(labels = dollar) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Median Household Income by Region", y = "Dollars ($)", x = NULL) +
+  theme(legend.position = "none") 
+
+  ggsave("/Users/eduardosmarin/Desktop/median_household_income.svg", width = 10, height = 6, dpi = 300)
+
+# ---- Plot 2: Race / Ethnicity ----
+pretty_names <- c(
+  pct_white = "White",
+  pct_black = "Black",
+  pct_asian = "Asian",
+  pct_hispanic = "Hispanic"
+)
+
+colors <- c(
+  "White" = "#F9BE00",
+  "Black" = "#61262A",
+  "Asian" = "#527D73",
+  "Hispanic" = "#708FB8"
+)
+
+df_demographic_all |>
+  dplyr::select(region, pct_white, pct_black, pct_asian, pct_hispanic) |>
+  pivot_longer(-region, names_to = "race", values_to = "value") |>
+  mutate(race = recode(race, !!!pretty_names)) |>
+  group_by(region) |>
+  summarise(race = c(race, "Other"),
+            value = c(value, 1 - sum(value, na.rm = TRUE)),
+            .groups = "drop") |>
+  mutate(
+    region = factor(region, levels = c("Massachusetts", "Chelsea", "Holyoke")),
+    race = factor(race, levels = c("Other", "Hispanic","Asian","Black","White"))
+  ) |>
+  ggplot(aes(x = region, y = value, fill = race)) +
+  geom_col(position = "stack", width = 0.7) +
+  geom_text(aes(label = ifelse(value >= 0.05, percent(value, accuracy = 1), NA)),
+            position = position_stack(vjust = 0.5), color = "white", size = 3.8) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_fill_manual(values = colors, drop = FALSE) +
+  coord_flip() +
+  theme_minimal(base_size = 13) +
+  labs(title = "Racial and Ethnic Composition by Municipality",
+       y = "Percent of Population", x = NULL, fill = "Race/Ethnicity") +
+  theme(legend.position = "right")
+
+  ggsave("/Users/eduardosmarin/Desktop/demographic.svg", width = 10, height = 6, dpi = 300)
+  
+# ---- Plot 3: Educational Attainment ----
+
+# Define custom color palette
+colors <- c("Holyoke" = "#0F4D92", "Chelsea" = "#F48734", "Massachusetts" = "#E5E5E5")
+
+# Clean variable labels for plotting
+pretty_names <- c(
+  median_income = "Median Household Income",
+  median_age = "Median Age",
+  pct_white = "Percent White (Non-Hispanic)",
+  pct_black = "Percent Black or African American",
+  pct_asian = "Percent Asian",
+  pct_hispanic = "Percent Hispanic or Latino",
+  pct_at_least_hs = "Percent with High School Education or Higher",
+  pct_at_least_college = "Percent with Bachelor’s Degree or Higher",
+  median_home_value = "Median Home Value",
+  median_rent = "Median Gross Rent",
+  pct_owner_occupied = "Percent Owner-Occupied Housing",
+  pct_renter_occupied = "Percent Renter-Occupied Housing"
+)
+
+df_demographic_all |>
+  mutate(region = factor(region, levels = c("Holyoke", "Chelsea", "Massachusetts"))) |>
+  dplyr::select(region, pct_at_least_hs, pct_at_least_college) |>
+  pivot_longer(-region, names_to = "education", values_to = "value") |>
+  mutate(education = recode(education, !!!pretty_names)) |>
+  ggplot(aes(x = region, y = value, fill = region)) +
+  geom_col(position = position_dodge()) +
+  geom_text(aes(label = percent(value, accuracy = 1)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 4) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_manual(values = colors) +
+  facet_wrap(~ education) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Educational Attainment (Age 25+)", y = "Percent of Adults", x = NULL) +
+  theme(legend.position = "none")
+
+  ggsave("/Users/eduardosmarin/Desktop/education.svg", width = 10, height = 6, dpi = 300)
+  
+# ---- Plot 4: Housing Costs ----
+df_demographic_all |>
+  mutate(region = factor(region, levels = c("Holyoke", "Chelsea", "Massachusetts"))) |>
+  dplyr::select(region, median_home_value, median_rent) |>
+  pivot_longer(-region, names_to = "type", values_to = "value") |>
+  mutate(type = recode(type, !!!pretty_names)) |>
+  ggplot(aes(x = region, y = value, fill = region)) +
+  geom_col(position = position_dodge()) +
+  geom_text(aes(label = scales::dollar(value)),
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 4) +
+  scale_y_continuous(labels = scales::dollar) +
+  scale_fill_manual(values = colors) +
+  facet_wrap(~ type, scales = "free_y") +
+  theme_minimal(base_size = 13) +
+  labs(title = "Median Home Value and Rent", y = "Dollars ($)", x = NULL) +
+  theme(legend.position = "none")
+
+ ggsave("/Users/eduardosmarin/Desktop/housing_cost.svg", width = 10, height = 6, dpi = 300)
+ 
+# ---- Plot 5: Housing Tenure ----
+df_demographic_all |>
+  mutate(region = factor(region, levels = c("Holyoke", "Chelsea", "Massachusetts"))) |>
+  dplyr::select(region, pct_owner_occupied, pct_renter_occupied) |>
+  pivot_longer(-region, names_to = "tenure", values_to = "value") |>
+  mutate(tenure = recode(tenure, !!!pretty_names)) |>
+  ggplot(aes(x = region, y = value, fill = region)) +
+  geom_col(position = position_dodge()) +
+  geom_text(aes(label = percent(value, accuracy = 1)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 4) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_manual(values = colors) +
+  facet_wrap(~ tenure) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Housing Tenure by Region", y = "Percent of Households", x = NULL) +
+  theme(legend.position = "none")
+ 
+  ggsave("/Users/eduardosmarin/Desktop/housing_tenure.svg", width = 10, height = 6, dpi = 300)
+
+```
+
+
+

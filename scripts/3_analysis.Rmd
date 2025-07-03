@@ -1,0 +1,213 @@
+---
+title: "EVST 496 Census Data"
+subtitle: "Census Comparison of Holyoke, MA and Chelsea, MA and Appending"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+# 0. Loading the packages
+
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Loading all packages
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          # , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          # , 'leafsync'  # linked maps
+          # , 'RColorBrewer'
+          )     
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+```
+
+# 1. Read-in subset, reshape, etc.
+
+```{r}
+# 1.  Reading in the data and double checks
+# Includes the subsetting of the data here (NOT IN SCRIPT 2); 
+# - Have one that is a behemoth
+# - Have on that is a lot smaller
+
+
+
+# Right here is where you grab all the columns
+
+# Right here, there will be some double checks, missingness, some quick summaries (sparkling clean dataset with only the things I need)
+
+```
+
+# 2. Q1 Difference in Survivorship.
+
+## A overall
+
+```{r}
+
+# - We want to only look at this 25% that we have both T1 and T2
+# - 1. Going to do a Tabyl on status and time (Alive vs. Dead)
+
+```
+
+Chi-square test here
+
+|     | Alive              | Dead              |
+|-----|--------------------|-------------------|
+| T1  | number of alive t1 | number of dead t1 |
+| T2  | number of alive t2 | number of dead t2 |
+
+We can run a chi square for that above, we are testing dependence, is
+there truly a difference3
+
+```{r}
+# 2. We also want a table that is per number and percent
+#     Pretty version of above for reporting with a percentage basis. How do they vary in between front and backyard
+
+```
+
+## B Front and Backyard
+
+```{r}
+
+# - We want to only look at this 25% that we have both T1 and T2 and back yard
+# - 1. Going to do a Tabyl on status and time (Alive vs. Dead)
+
+```
+
+Chi-square test here
+
+| Time | Type  | Dead           | Alive            |
+|------|-------|----------------|------------------|
+| T1   | Front | number of dead | number of alive  |
+| T1   | Back  | number of dead | number of alive  |
+| T2   | Front | number of dead | number of alive  |
+| T2   | Back  | number of dead | nnumber of alive |
+
+We can run a chi square for that above, we are testing dependence, is
+there truly a difference3
+
+```{r}
+# 2. We also want a table that is per number and percent
+#     Pretty version of above for reporting with a percentage basis. How do they vary in between front and backyard
+
+```
+
+## C City
+
+```{r}
+# Is there a difference in survivorship across city? 
+
+# - We want to only look at this 25% that we have both T1 and T2
+# - 1. Going to do a Tabyl on status and time (Alive vs. Dead)
+
+```
+
+Chi-square test here
+
+| Time | City    | Dead           | Alive            |
+|------|---------|----------------|------------------|
+| T1   | Chelsea | number of dead | number of alive  |
+| T1   | Holyoke | number of dead | number of alive  |
+| T2   | Chelsea | number of dead | number of alive  |
+| T2   | Holyoke | number of dead | nnumber of alive |
+
+We can run a chi square for that above, we are testing dependence, is
+there truly a difference3
+
+```{r}
+# 2. We also want a table that is per number and percent
+#     Pretty version of above for reporting with a percentage basis. How do they vary in between front and backyard
+
+```
+
+## D Front-back and City Interaction Effect
+
+```{r}
+# Is there a difference in survivorship across city and front and back? 
+
+# - We want to only look at this 25% that we have both T1 and T2
+# - 1. Going to do a Tabyl on status and time (Alive vs. Dead)
+# -- Instaed of tabyl, potentially use group_by
+
+```
+
+Chi-square test here
+
+| Time | City    | Front-back | Dead           | Alive            |
+|------|---------|------------|----------------|------------------|
+| T1   | Chelsea | Front      | number of dead | number of alive  |
+| T1   | Chelsea | Back       | number of dead | number of alive  |
+| T1   | Holyoke | Front      | number of dead | number of alive  |
+| T1   | Holyoke | Back       | number of dead | nnumber of alive |
+| T2   | Chelsea | Front      | number of dead | number of alive  |
+| T2   | Chelsea | Back       | number of dead | number of alive  |
+| T2   | Holyoke | Front      | number of dead | number of alive  |
+| T2   | Holyoke | Back       | number of dead | nnumber of alive |
+
+\#
+
+We can run a chi square for that above, we are testing dependence, is
+there truly a difference3
+
+```{r}
+# 2. We also want a table that is per number and percent
+#     Pretty version of above for reporting with a percentage basis. How do they vary in between front and backyard
+```
+
+# 3. Q2 If there is a difference of survivorship between front and backyard, is the extent in which affected by median-household income?
+
+```{r}
+# The tool here is a mixed effect logistic regression, with a random effect for treeid and home value as a predictor
+
+# mod <- lme4::lmer(status ~ yard*city + home_value + (1 | treeid))
+
+# ^ this is a mixed effect approach
+
+```
+
+Another way to do what it was earlier ^ is through a survival analysis
+
+```{r}
+# It is called time to event survival analysis. This is important. We have to switch the code to dead 1 being an event while no event (aka surviving) remains 0. 
+
+# What the survivor anlaysis is saying, like a logistic regression but accounting for time and we can put in multiple predictors. Cogs proportional hazard model
+```
+
+
+
+
