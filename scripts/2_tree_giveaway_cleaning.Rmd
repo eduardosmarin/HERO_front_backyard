@@ -286,7 +286,8 @@ chelsea_giveaways |>
   summarise(List = paste(DBH1_24, collapse = ", ")) |>
   print(n = Inf) # DBH1_24 conditions for all years
 
-# DL: Would not do this with the Holyoke, looked at the data and figured it was the same format as the Chelsea
+# DL: Would not do this with the Holyoke, looked at the data and figured it was the same format as the Chelsea #EM: What do you mean?
+
 ```
 
 # 2. Cleaning the Chelsea, MA Giveaway Data 
@@ -309,31 +310,31 @@ chelsea_giveaway_overview <-
     , Broadleaf_Conifer            = Broadleaf
     , Species                      = Species
     , Native_Status                = Native_Sta
-    , DBH_2021_2023                = DBH_dcr
-    , Height_Unformatted_2021_2023 = Hght_17 # Needs cleaning
+    # , DBH_2021_2023                = DBH_dcr
+    , Height_2017                  = Hght_17 # EM: To do! Needs cleaning
     , Owner_Address_P1             = ADDRESS # Needs double checking here
     , Owner_Address_P2             = OWNERAD # Needs standardization
-    , Basal_Sprouts_2014_2016      = BSp_17
+    , Basal_Sprouts_2017           = BSp_17
     , Comment_Survey_2017          = Cmmnt_1
-    , DBH_2014_2016                = DBH1_17
-    , Mortality_Status_2014_2016   = M_17
-    , Vigor_2014_2016              = V_17
-    , Land_Use_2014_2016           = LUse_17
-    , Site_Type_2014_2016          = StTp_17  
-    , Width_2014_2016              = Wth_17
+    , DBH_2017                     = DBH1_17
+    , Mortality_Status_2017        = M_17
+    , Vigor_2017                   = V_17
+    , Land_Use_2017                = LUse_17
+    , Site_Type_2017               = StTp_17  
+    , Width_2017                   = Wth_17
     , Common_Name                  = CommonName
-    , Unique_ID_New                = NewTrID # DL: Which one should I use?
-    , Site_Type_2014_2023          = StTp_24
-    , Land_Use_2014_2023           = LUse_24
-    , Basal_Sprouts_2014_2023      = Bsp_24   # Seems to be less comprehensive
-    , Vigor_2014_2023              = V_24
-    , Conditions_2014_2023         = Con_24 # Condition for all the years
+    , Unique_ID_New                = NewTrID 
+    , Site_Type_2024               = StTp_24
+    , Land_Use_2024                = LUse_24
+    , Basal_Sprouts_2024           = Bsp_24 # Seems to be less comprehensive
+    , Vigor_2024                   = V_24
+    , Conditions_2024              = Con_24 # Condition for all the years
     , Comment_Survey_2024          = Com_24
-    , DBH_2014_2023                = DBH1_24
-    , Height_2014_2023             = Hgt_24
-    , Width_2014_2023              = Wth_24
+    , DBH_2024                     = DBH1_24
+    , Height_2024                  = Hgt_24
+    , Width_2024                   = Wth_24
     , Date_Surveyed                = D_24
-    , Mortality_Status_2014_2023   = M_24
+    , Mortality_Status_2024        = M_24
     , Date_Inserted                = CreationDate
     , Author_Inserted              = Creator
     , Date_Edited                  = EditDate
@@ -385,16 +386,25 @@ pre_chelsea_giveaway_analysis <-
     , Native_Status                
     , Deciduous_Evergreen          
     , Broadleaf_Conifer            
-    , Public_Private               
-    , Land_Use_2014_2023           
-    , Site_Type_2014_2023          
-    , Vigor_2014_2023              
-    , Mortality_Status_2014_2023
-    , Conditions_2014_2023         
-    , DBH_2014_2023                
-    , Height_2014_2023             
-    , Width_2014_2023              
-    , Basal_Sprouts_2014_2023      
+    , Public_Private    
+    , Land_Use_2017
+    , Land_Use_2024
+    , Site_Type_2017  
+    , Site_Type_2024     
+    , Vigor_2017
+    , Vigor_2024     
+    , Mortality_Status_2017
+    , Mortality_Status_2024
+    # , Conditions_2017 This does not seem to eist
+    , Conditions_2024         
+    , DBH_2017
+    , DBH_2024     
+    , Height_2017
+    , Height_2024    
+    , Width_2017
+    , Width_2024 
+    , Basal_Sprouts_2017
+    , Basal_Sprouts_2024      
     , Comment_General              
     , Comment_Survey_2017             
     , Comment_Survey_2024          
@@ -432,52 +442,52 @@ compare_df_cols(chelsea_giveaways, holyoke_giveaways) |>
 holyoke_giveaway_overview <-
   holyoke_giveaways |> 
     rename(
-      # Unique_ID                    = OID_
+      # Unique_ID                  = OID_
       Date_Planted                 = DATEPLANTE
-      # New_Address                  = nw_ddrs
+      # New_Address                = nw_ddrs
     , Public_Private               = Pub_Priv
-      # Comment_General              = COMMENT
+      # Comment_General            = COMMENT
     , Cultivar                     = Cultivar
-      # Year_Planted                 = GGC_SEA
-      # Season_Planted               = GGC_SEA
-      # City                         = CITY_GG
+      # Year_Planted               = GGC_SEA
+      # Season_Planted             = GGC_SEA
+      # City                       = CITY_GG
     , Family                       = Family
     , Genus                        = Genus
     , Deciduous_Evergreen          = Deciduous
-      # Broadleaf_Conifer            = Broadleaf
+      # Broadleaf_Conifer          = Broadleaf
     , Species                      = Species
     , Native_Status                = Native_Sta
-    # , DBH_2021_2023                = DBH_dcr
-    , Height_Unformatted_2021_2023 = Hgt_17 # Needs cleaning
-    # , Owner_Address_P1             = ADDRESS # Needs double checking here
-    # , Owner_Address_P2             = OWNERAD # Needs standardization
-    , Basal_Sprouts_2014_2016      = BSp_17
-      # Comment_Planting             = Cmmnt_1
-    , DBH_2014_2016                = DBH1_17
-    , Mortality_Status_2014_2016   = M_17
-    , Vigor_2014_2016              = V_17
-    , Land_Use_2014_2016           = LUse_17
-    , Site_Type_2014_2016          = StTp_17  
-    , Width_2014_2016              = Wth_17
+    # , DBH_2021_2023              = DBH_dcr
+    , Height_2017                  = Hgt_17 # EM: Still do! Needs cleaning
+    # , Owner_Address_P1           = ADDRESS # Needs double checking here
+    # , Owner_Address_P2           = OWNERAD # Needs standardization
+    , Basal_Sprouts_2017           = BSp_17
+      # Comment_Planting           = Cmmnt_1
+    , DBH_2017                     = DBH1_17
+    , Mortality_Status_2017        = M_17
+    , Vigor_2017                   = V_17
+    , Land_Use_2017                = LUse_17
+    , Site_Type_2017               = StTp_17  
+    , Width_2017                   = Wth_17
     , Common_Name                  = commonName
-    , Unique_ID_New                = NewTreeID # DL: Which one should I use?
-    , Site_Type_2014_2023          = StTp_24
-    , Land_Use_2014_2023           = LUse_24
-    , Basal_Sprouts_2014_2023      = BSp_24 # Seems to be less comprehensive
-    , Vigor_2014_2023              = V_24
-    , Conditions_2014_2023         = Con_24 # Condition for all the years
-      # Comment_Survey_2024          = Com_24
-    , DBH_2014_2023                = DBH1_24
-    , Height_2014_2023             = Hgt_24
-    , Width_2014_2023              = Wth_24
+    , Unique_ID_New                = NewTreeID 
+    , Site_Type_2024               = StTp_24
+    , Land_Use_2024                = LUse_24
+    , Basal_Sprouts_2024           = BSp_24 # Seems to be less comprehensive
+    , Vigor_2024                   = V_24
+    , Conditions_2024              = Con_24 # Condition for all the years
+      # Comment_Survey_2024        = Com_24
+    , DBH_2024                     = DBH1_24
+    , Height_2024                  = Hgt_24
+    , Width_2024                   = Wth_24
     , Date_Surveyed                = Date_24
-    , Mortality_Status_2014_2023  = M_24
-      # Date_Inserted                = CreationDate
-      # Author_Inserted              = Creator
-      # Date_Edited                  = EditDate
-      # Author_Edited                = Editor
-    , Northing                     = lat  # EM: Fix to make lat, long,
-    , Easting                    = long  # EM: Fix to make lat, long,
+    , Mortality_Status_2024        = M_24
+      # Date_Inserted              = CreationDate
+      # Author_Inserted            = Creator
+      # Date_Edited                = EditDate
+      # Author_Edited              = Editor
+    , Northing                     = lat  
+    , Easting                      = long 
     ) |>
    mutate(City = "HOLYOKE"                      # Need to add for the bind and select in the future
        , Broadleaf_Conifer = NA_character_
@@ -520,16 +530,25 @@ pre_holyoke_giveaway_analysis <-
     , Native_Status                
     , Deciduous_Evergreen          
     , Broadleaf_Conifer            
-    , Public_Private               
-    , Land_Use_2014_2023           
-    , Site_Type_2014_2023          
-    , Vigor_2014_2023              
-    , Mortality_Status_2014_2023   
-    , Conditions_2014_2023         
-    , DBH_2014_2023                
-    , Height_2014_2023             
-    , Width_2014_2023              
-    , Basal_Sprouts_2014_2023      
+    , Public_Private   
+    , Land_Use_2017
+    , Land_Use_2024 
+    , Site_Type_2017
+    , Site_Type_2024  
+    , Vigor_2017
+    , Vigor_2024              
+    , Mortality_Status_2017   
+    , Mortality_Status_2024   
+    # , Conditions_2017 There does not seem to be a conditions in 2017
+    , Conditions_2024
+    , DBH_2017 
+    , DBH_2024    
+    , Height_2017  
+    , Height_2024  
+    , Width_2017  
+    , Width_2024 
+    , Basal_Sprouts_2017  
+    , Basal_Sprouts_2024      
     , Comment_General
     , Comment_Survey_2017
     , Comment_Survey_2024
@@ -553,27 +572,27 @@ pre_holyoke_giveaway_analysis$Longitude <- temp_holyoke_coords[,1]
 pre_holyoke_giveaway_analysis$Latitude  <- temp_holyoke_coords[,2]
 
 # 5. Reverse geocoding for the addresses
-## a) Finding all the addresses to append
-# giveaway_with_addresses <- 
-#   pre_holyoke_giveaway_analysis |>
-#   reverse_geocode(
-#     lat = Latitude,
-#     long = Longitude,
-#     method = "arcgis",     
-#     full_results = TRUE    
-#   )
+# a) Finding all the addresses to append
+giveaway_with_addresses <-
+  pre_holyoke_giveaway_analysis |>
+  reverse_geocode(
+    lat = Latitude,
+    long = Longitude,
+    method = "arcgis",
+    full_results = TRUE
+  )
 
-## b) Creating new data frame to append
-# shortlabel_data <- 
-#   giveaway_with_addresses |>
-#   dplyr::select(Unique_ID_New, ShortLabel)
+# b) Creating new data frame to append
+shortlabel_data <-
+  giveaway_with_addresses |>
+  dplyr::select(Unique_ID_New, ShortLabel)
 
-## c) Appending the data
-# pre_holyoke_giveaway_analysis <-
-#   pre_holyoke_giveaway_analysis |>
-#   left_join(shortlabel_data, by = "Unique_ID_New") |>
-#   mutate(Address = ShortLabel) |>
-#   dplyr::select(-ShortLabel)
+# c) Appending the data
+pre_holyoke_giveaway_analysis <-
+  pre_holyoke_giveaway_analysis |>
+  left_join(shortlabel_data, by = "Unique_ID_New") |>
+  mutate(Address = ShortLabel) |>
+  dplyr::select(-ShortLabel)
 
 # Approximately ~110 that need fixing; DL: not sure how urgent since we are not doing analysis with address, but added it so it was nice to have
 
@@ -586,12 +605,20 @@ compare_df_cols(pre_chelsea_giveaway_analysis, pre_holyoke_giveaway_analysis) |>
 
 # 4. Combining the Chelsea, MA and Holyoke, MA Giveaway Data
 ```{r}
+# 1. Combining both of the datasets and making it time long
 pre_hero_tree_giveaway <- 
   bind_rows(
     pre_chelsea_giveaway_analysis
   , pre_holyoke_giveaway_analysis
     ) |>
-  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) 
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) |>
+  mutate(Row_ID = row_number()) |> # Need this since Unique_ID_New isn't really unique; also meeds to be before the pivot to maintain
+  pivot_longer(
+    cols = ends_with("_2017") | ends_with("_2024") # Selects these in specific
+  , names_to = c(".value", "Year_Surveyed")
+  , names_pattern = "(.*)_(2017|2024)" # Gives them the written pattern as either 2017 or 2023
+  )
+
 ```
 
 # 5. Creating the appending columns for the final HERO Giveaway Dataset
@@ -672,7 +699,8 @@ pre_i_tree_table_v2 <-
            , sheet = "i-Tree Species List"
            , n_max = 19) |>
   dplyr::select(1:8)
-# DL: There are some odd species without a noticaebale TREEID, being the following: Quercus x warei, Prunus x incam, Malus x domestica. Other [genus spp.] had little to no information—those were also not helpful
+
+# DL: There are some odd species without a noticaebale TREEID, being the following: Quercus x warei, Prunus x incam, Malus x domestica. Other [genus spp.] had little to no information—those were also not helpful. EM: I think those were just added as it came from the sheet they gave and tried to find the best one, including other
 
 # 2d. Merging both index tables for future i-Tree analysis
 i_tree_table <- 
@@ -692,66 +720,72 @@ hero_tree_giveaway <-
   mutate(Address = str_to_upper(Address)
        , Public_Private = str_to_title(Public_Private)) |> #Making all the addresses capitals
   arrange(City, Address) |>
-  mutate(Row_ID = row_number()) |> # Need this since Unique_ID_New isn't really unique
   mutate(Date_Planted = mdy(Date_Planted)) |>
   mutate(Date_Planted = if_else(is.na(Date_Planted), as.Date("2021-05-19"), Date_Planted)) |> 
   mutate(
     Year_Planted = year(Date_Planted),
     Month = month(Date_Planted),
     Season_Planted = case_when(
-      Month %in% c(3, 4, 5, 6, 7) ~ "SPRING" #DL: Should we include July in Spring? # DHL ask John Rogan
-    , Month %in% c(8, 9, 10, 11) ~ "FALL" #DL: Should we include August in Fall?
+      Month %in% c(3, 4, 5, 6, 7) ~ "SPRING" #DL: Please check your email to double check this # DHL ask John Rogan
+    , Month %in% c(8, 9, 10, 11) ~ "FALL" #EM: Please check your email to double check this
     , TRUE ~ NA_character_      
     )
   ) |>
   dplyr::select(-Month, -Broadleaf_Conifer) |>
-  mutate(Vigor_2014_2023 = as.character(Vigor_2014_2023)
-       , Vigor_2014_2023 = case_when(
-            Vigor_2014_2023 == "1" ~ "100% to 90% Full"
-          , Vigor_2014_2023 == "2" ~ "90% to 75% Full"
-          , Vigor_2014_2023 == "3" ~ "75% to 50% Full"
-          , Vigor_2014_2023 == "4" ~ "50% or less"
-          , Vigor_2014_2023 == "5" ~ "Unsure" #DL: I need to ask based on the presentation!
-          , TRUE ~ Vigor_2014_2023)
-       , Site_Type_2014_2023 = case_when(
-            Site_Type_2014_2023 == "SC" ~ "Sidewalk Cutout"
-          , Site_Type_2014_2023 == "BY" ~ "Backyard"
-          , Site_Type_2014_2023 == "FY" ~ "Front Yard"
-          , Site_Type_2014_2023 == "OM" ~ "Other Maintained"
-          , Site_Type_2014_2023 == "SY" ~ "Side Yard"
-          , Site_Type_2014_2023 == "MP" ~ "Maintained Park"
-          , Site_Type_2014_2023 == "SP" ~ "Sidewalk Planting Strip"
-          , TRUE ~ Site_Type_2014_2023)
-       , Land_Use_2014_2023 = case_when(
-         # DHL case_when works here, a small table and a left_join can also accomplish this. Tomatoe Tomatoe
-            Land_Use_2014_2023 == "MFR"   ~ "Multi-Family Residential"               
-          , Land_Use_2014_2023 == "SFR-D" ~ "Single-Family Detached"               
-          , Land_Use_2014_2023 == "SFR-A" ~ "Single-Family Attached"               
-          , Land_Use_2014_2023 == "INST"  ~ "Institutional"               
-          , Land_Use_2014_2023 == "COMM"  ~ "Commercial"               
-          , Land_Use_2014_2023 == "MP"    ~ "Maintained Park"               
-          , Land_Use_2014_2023 == "V"     ~ "Vacant"      
-          , Land_Use_2014_2023 == "MX"    ~ "Mixed Use"            
-          , Land_Use_2014_2023 == "IND"   ~ "Industrial"              
-          , Land_Use_2014_2023 == "O"     ~ "Other"            
-          , Land_Use_2014_2023 == "TR"    ~ "Transportation"               
-          , Land_Use_2014_2023 == "UT"    ~ "Unsure" #DL: I need to ask based on the presentation 
-          , TRUE ~ Land_Use_2014_2023)
-        , General_Location_2014_2023 = case_when(
-            Site_Type_2014_2023 %in% c("Sidewalk Cutout", "Sidewalk Planting Strip") ~ "Street Trees"
-          , Site_Type_2014_2023 %in% c("Backyard", "Front Yard", "Side Yard") ~ "Yard Trees"
-          , Site_Type_2014_2023 %in% c("Other Maintained", "Maintained Park") ~ "Maintained Area"
+  mutate(Vigor = as.character(Vigor)
+       , Vigor = case_when(
+            Vigor == "1" ~ "100% to 90% Full"
+          , Vigor == "2" ~ "90% to 75% Full"
+          , Vigor == "3" ~ "75% to 50% Full"
+          , Vigor == "4" ~ "50% or less"
+          , Vigor == "5" ~ "Unsure" #EM: Please check your email to double check this
+          , TRUE ~ Vigor)
+       , Site_Type = case_when(
+            Site_Type == "SC" ~ "Sidewalk Cutout"
+          , Site_Type == "BY" ~ "Backyard"
+          , Site_Type == "FY" ~ "Front Yard"
+          , Site_Type == "OM" ~ "Other Maintained"
+          , Site_Type == "SY" ~ "Side Yard"
+          , Site_Type == "MP" ~ "Maintained Park"
+          , Site_Type == "SP" ~ "Sidewalk Planting Strip"
+          , TRUE ~ Site_Type)
+       , Mortality_Status = case_when(
+            Mortality_Status == "SD" ~ "Standing Dead"
+          , Mortality_Status == "A" ~ "Alive"
+          , Mortality_Status == "R" ~ "Removed"
+          , Mortality_Status == "Y" ~ "Unknown" #EM: Please check, not sure what this means
+       ) 
+       , Land_Use = case_when(
+            Land_Use == "MFR"   ~ "Multi-Family Residential"               
+          , Land_Use == "SFR-D" ~ "Single-Family Detached"               
+          , Land_Use == "SFR-A" ~ "Single-Family Attached"   
+          , Land_Use == "SFR"   ~ "Single-Family General"
+          , Land_Use == "INST"  ~ "Institutional"               
+          , Land_Use == "COMM"  ~ "Commercial"               
+          , Land_Use == "MP"    ~ "Maintained Park"               
+          , Land_Use == "V"     ~ "Vacant"      
+          , Land_Use == "MX"    ~ "Mixed Use"            
+          , Land_Use == "IND"   ~ "Industrial"              
+          , Land_Use == "O"     ~ "Other"            
+          , Land_Use == "TR"    ~ "Transportation"               
+          , Land_Use == "UT"    ~ "Unsure" #EM: Please fix this when push comes to shove
+          , TRUE ~ Land_Use)
+        , General_Location = case_when(
+            Site_Type %in% c("Sidewalk Cutout", "Sidewalk Planting Strip") ~ "Street Trees"
+          , Site_Type %in% c("Backyard", "Front Yard", "Side Yard") ~ "Yard Trees"
+          , Site_Type %in% c("Other Maintained", "Maintained Park") ~ "Maintained Area"
           , TRUE ~ NA_character_)
               ) |>
     left_join(broadleaf_conifer_table, by = "Species") |>
     left_join(i_tree_table, by = "Species") |>
     dplyr::select(
-      , Row_ID        
+      , Row_ID      
       , Address                  
       , City
       , Date_Planted                 
       , Year_Planted                 
-      , Season_Planted               
+      , Season_Planted 
+      , Year_Surveyed
       , Family                       
       , Genus                        
       , Species                      
@@ -767,33 +801,22 @@ hero_tree_giveaway <-
       , Native_Status                
       , Deciduous_Evergreen          
       , Broadleaf_Conifer            
-      , Public_Private               
-      , Land_Use_2014_2023    
-      , General_Location_2014_2023
-      , Site_Type_2014_2023          
-      , Vigor_2014_2023              
-      , Mortality_Status_2014_2023   
-      , Conditions_2014_2023         
-      , DBH_2014_2023                
-      , Height_2014_2023             
-      , Width_2014_2023              
-      , Basal_Sprouts_2014_2023      
+      , Public_Private   
+      , Land_Use
+      , General_Location
+      , Site_Type         
+      , Vigor             
+      , Mortality_Status  
+      , Conditions         
+      , DBH            
+      , Height           
+      , Width             
+      , Basal_Sprouts     
       , Comment_General
-      , Comment_Survey_2017
-      , Comment_Survey_2024
+      , Comment_Survey
       , Unique_ID_New   
     ) |>
     rename(
-        Land_Use         = Land_Use_2014_2023                         
-      , General_Location = General_Location_2014_2023                     
-      , Site_Type        = Site_Type_2014_2023                               
-      , Vigor            = Vigor_2014_2023                                   
-      , Mortality        = Mortality_Status_2014_2023                        
-      , Conditions       = Conditions_2014_2023                              
-      , DBH              = DBH_2014_2023       
-      , Height           = Height_2014_2023         
-      , Width            = Width_2014_2023          
-      , Basal_Sprouts    = Basal_Sprouts_2014_2023  
       , New_Tree_ID      = Unique_ID_New #Had a change of mind and wanted to continue having the ID name that was there before
     )
 
@@ -805,14 +828,14 @@ hero_tree_giveaway #Yay :). Should be fully cleaned now and organized.
 ```{r}
 # 1. Writing out the dataset
 hero_tree_giveaway |>
-  st_write(paste0("output_data/hero_tree_giveaway_", Sys.Date(), ".gpkg"))
+  st_write(paste0("input_data/General/hero_tree_giveaway_", Sys.Date(), ".gpkg"))
 
 # Moved in the .gpkg to the input General folder
 
 # 2. DL: If you want to do double checks. I suggest downloading mine which has the 
 # direct reverse geocoded so you do not have to go through that process; I commented it out momentarily.
 check_hero_tree_giveaway <-
-  st_read("input_data/General/hero_tree_giveaway_2025-04-27.gpkg")
+  st_read("input_data/General/hero_tree_giveaway_2025-07-15.gpkg")
 # DHL: no changes suggested here, but that would have been nice to know up top :-)
 # DHL: no changes suggested here, but you seem to have a lot folders called "General". Be careful you may fool yourself
 
