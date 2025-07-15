@@ -416,18 +416,18 @@ pre_chelsea_giveaway_analysis <-
 
 # 3. Getting the lat and long of the variables for further analysis
 ## a) Transforming into an SF object based off of Massachusetts State Plane, NAD83, feet
-temp_chelsea_sf <- 
+pre_chelsea_giveaway_analysis <- 
   pre_chelsea_giveaway_analysis |>
-  st_as_sf(coords = c("Easting", "Northing"), crs = 26986) |>
+  st_as_sf(coords = c("Easting", "Northing"), crs = 26986, remove = FALSE) |> # remove = FALSE instead of below. Safer
   st_transform(crs = 4326)  
 
-## b) Receiving the coordinates data
-temp_chelsea_coords <- 
-  st_coordinates(temp_chelsea_sf)
-
-## c) Appending the coordinate data  
-pre_chelsea_giveaway_analysis$Longitude <- temp_chelsea_coords[,1]
-pre_chelsea_giveaway_analysis$Latitude  <- temp_chelsea_coords[,2]
+# ## b) Receiving the coordinates data
+# temp_chelsea_coords <- 
+#   st_coordinates(temp_chelsea_sf)
+# 
+# ## c) Appending the coordinate data  
+# pre_chelsea_giveaway_analysis$Longitude <- temp_chelsea_coords[,1]
+# pre_chelsea_giveaway_analysis$Latitude  <- temp_chelsea_coords[,2]
 
 ```
 
@@ -560,7 +560,7 @@ pre_holyoke_giveaway_analysis <-
 ## a) Transforming into an SF object based off of Massachusetts State Plane, NAD83, feet
 temp_holyoke_sf <- 
   pre_holyoke_giveaway_analysis |>
-  st_as_sf(coords = c("Easting", "Northing"), crs = 26986) |>
+  st_as_sf(coords = c("Easting", "Northing"), crs = 26986) |> # TODO , remove = FALSE but then rename Easting and Northing
   st_transform(crs = 4326)  
 
 ## b) Receiving the coordinates data
@@ -571,7 +571,7 @@ temp_holyoke_coords <-
 pre_holyoke_giveaway_analysis$Longitude <- temp_holyoke_coords[,1]
 pre_holyoke_giveaway_analysis$Latitude  <- temp_holyoke_coords[,2]
 
-# 5. Reverse geocoding for the addresses
+# 5. Reverse geocoding for the addresses # TODO why do you need addresses?
 # a) Finding all the addresses to append
 giveaway_with_addresses <-
   pre_holyoke_giveaway_analysis |>
@@ -579,7 +579,7 @@ giveaway_with_addresses <-
     lat = Latitude,
     long = Longitude,
     method = "arcgis",
-    full_results = TRUE
+    full_results = TRUE # TODO if its long and slow, save it out and read in the results. 
   )
 
 # b) Creating new data frame to append
@@ -611,8 +611,8 @@ pre_hero_tree_giveaway <-
     pre_chelsea_giveaway_analysis
   , pre_holyoke_giveaway_analysis
     ) |>
-  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) |>
-  mutate(Row_ID = row_number()) |> # Need this since Unique_ID_New isn't really unique; also meeds to be before the pivot to maintain
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) |> # TODO why make spatial AGAIN, you already have these data as sf object, right?
+  mutate(Row_ID = row_number()) |> # Need this since Unique_ID_New isn't really unique; also meeds to be before the pivot to maintain # TODO, we already found out the uniqe IDs are legit, why make another new ID?
   pivot_longer(
     cols = ends_with("_2017") | ends_with("_2024") # Selects these in specific
   , names_to = c(".value", "Year_Surveyed")
@@ -833,7 +833,7 @@ massachusetts_cbgs <-
 
  holyoke_boundary <-
   st_read("./input_data/Holyoke/Boundaries/holyoke_boundary.gpkg") |>
-  st_transform(st_crs(cbg_massachusetts))
+  st_transform(st_crs(massachusetts_cbgs))
 
 holyoke_cbgs <- 
   massachusetts_cbgs |> 
@@ -846,7 +846,7 @@ holyoke_cbgs <-
 ## b. Chelsea Census Data
 chelsea_boundary <-
   st_read("./input_data/Chelsea/Boundaries/chelsea_boundary.gpkg") |>
-  st_transform(st_crs(cbg_massachusetts))
+  st_transform(st_crs(massachusetts_cbgs))
 
 chelsea_cbgs <-
   massachusetts_cbgs |> 
