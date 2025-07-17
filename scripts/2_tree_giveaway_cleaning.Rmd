@@ -1049,3 +1049,51 @@ Also, in terms of progress:
 3. Pulled the GIS data of Mass for Property Parcel data using an API package in R
 4. Combined both datasets and selected the columns best needed 
 5. Created the final subset [still need to filter for FY BY + add mortality booleans for the future] but should be in the beginning process for analysis.
+
+```{r}
+
+(
+  df_long <-
+  df |> 
+  select(dhl_id, neigh : season2, planting_date,  year_planting, starts_with('status_')) |> 
+  # filter(status_1 == 1) #|> # ~4% did not live to first year inspection?
+  # pivot_longer(starts_with('status_'), values_to = 'status') |> 
+  # STOP contributing time (make tibble jagged for pivoting shorter)
+  mutate(
+    # if you are dead, stay dead (so we can remove you later)
+      status_2 = ifelse(status_1 == 1 & status_2 == 0, NA, status_2) # dead at inspection 1, make rest NA part 1 / 2
+    , status_5 = ifelse(status_1 == 1 & status_2 == 0, NA, status_2) # dead at inspection 1, make rest NA part 2 / 2
+    , status_5 = ifelse(status_1 == 0 & status_2 == 1, NA, status_5) # dead at inspection 2, make rest NA
+    ) |> 
+  pivot_longer(starts_with('status_'), values_to = 'status', values_drop_na = TRUE) |> 
+  mutate(inspection_date =
+           lubridate::ymd(as.character(year_planting + as.numeric(str_remove_all(name, 'status_'))), truncated = 2L) # gets year inspected
+         + months(6) # + days(14) # gets us to Jul 1 of that year (may want June 1, Jun 15, July 15 for sensitiity)
+         , days_ = as.integer(inspection_date - planting_date)
+         ) |> 
+  # mutate(year_inspection = year_planting + as.numeric(str_remove_all(name, 'status_'))) |> # uses calendar years (2007, 2008, etc.)
+  mutate(inspection = as.numeric(str_remove_all(name, 'status_'))) |>                 # uses planting years (1, 2, or 5)
+  filter(inspection_date < '2025-07-01') |> # drop inspections that haven't happened yet
+  select(dhl_id    # id
+         , days_   # time
+         # , time = year_inspection
+         , status  # event
+         , inspection
+         , neigh   # covariates
+         , pct_owner_occ_2017
+         , pct_impervious_2017
+         , pct_white_2017
+         , poverty_rate_2017
+         , season
+         , season2
+         , year_planting
+         , inspection_date
+         ) |> 
+  # filter(time < 2026) |>
+  # Typically you will see 1=event, 0=censored.
+  mutate(status = recode(status, `1` = 0, `0` = 1)) |>  # CRITICAL!!!
+  distinct() # no issues with duplicates
+  )
+
+```
+
