@@ -61,7 +61,7 @@ vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE,
 ```{r}
 # 1. Reading the massive dataset as one
 hero_tree_giveaway_all <-
-  st_read("./input_data/General/hero_tree_giveaway_all_2025-07-15.gpkg")
+  st_read("input_data/General/hero_tree_giveaway_all_2025-07-15.gpkg")
 
 # 2. Subsetting to the dataset that we need which only has those from T1 & T2
 hero_tree_giveaway_subset <- 
@@ -73,15 +73,33 @@ hero_tree_giveaway_subset <-
   ungroup()
 
 
-# 3. 
+# 3. Stress test about existing in Time 1, Time 2, and we need days in the ground; a lot of nested functions (walk through thats); we need to know from John when these trees were surveyed; the middle day of that that is June 30th [we need a sensitivity analysis] -- time is July 30th, so we assum that it is June 30th; do it again june 30ths; we need times and days between planted and inspected.
+## 4. Double checked, in three do a Chi Square and Time in the ground is being ignored; saw it in time 1 and time 2; is it more different and it is a more descriptive, then we looking at the subset alive and dad. Then we build from there to a more sophisticated analysis with a binary outcomes. We need to understand the factors that differ between survivalship and how they fron tand bckyard
+
+# Action Items
+## 1. Request the Vintage 2017 from MassGIS | massgismail@mass.gov
+####   https://www.mass.gov/info-details/massgis-data-property-tax-parcels (says I can vintage); just interested in assessed values and location ####. if they come back and say fields have changed
+
+## 2. Switch IDs and check the one with John; one tree in there twice in Chelsea
+
+## 3. We needs in the days in the ground; should see it
+
+https://www.mass.gov/info-details/massgis-data-property-tax-parcels
+## 2. 
+
 ## a) Next steps: subset for FY and BY data, select the onlin columns we want for the analysis, and hard-code the TRUE FALSE boolean values for the tree survivorship based on the surivorship
 ```
+
+# 1. Investigate the diferent land use over the years and why they are changing
 
 Agenda today
 1. Discuss if there is anything else needed for variables and if it was pivoted correctly
 2. Discuss if the Census Data was done correctly or needs to be shifted
 3. Discuss what to do with property parcel information; the only available was the most recent which had different assessment years (and could only find that and receive the data through an API package in R); how do you find the vintage ones?
 4. Any major errors in the datasets
+5. Email someone about 2017 Vintage Parcels; writing the data acquisition emails; some government employees is there will be instances where you ned that file to proceed; know that that data exists; poke around and email (3 minute or less and cc'd Dexter); also, includ you...good enough set of massgismail@gmail.com
+
+
 
 ```{r}
 # 1.  Reading in the data and double checks

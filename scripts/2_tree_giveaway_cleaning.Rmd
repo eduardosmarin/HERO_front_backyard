@@ -419,9 +419,10 @@ pre_chelsea_giveaway_analysis <-
 pre_chelsea_giveaway_analysis <- 
   pre_chelsea_giveaway_analysis |>
   st_as_sf(coords = c("Easting", "Northing"), crs = 26986, remove = FALSE) |> # remove = FALSE instead of below. Safer
-  st_transform(crs = 4326)  
+  st_transform(crs = 4326)  #EM: Rename Easting and Northing to Latitude and Longtidue
 
-# ## b) Receiving the coordinates data
+# ## b) Receiving the coordinates data #not sure if they keep things in the sam order; binding by order is not best practices (joining by unique_id is better
+
 # temp_chelsea_coords <- 
 #   st_coordinates(temp_chelsea_sf)
 # 
