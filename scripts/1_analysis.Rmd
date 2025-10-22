@@ -1,0 +1,388 @@
+---
+title: "EVST 4960 Analysis"
+subtitle: "Completing the Statistical Tests"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Outputs
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          # , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          # , 'leafsync'  # linked maps
+          # , 'RColorBrewer'
+          , 'survival'
+          , 'ggsurvfit'
+          , 'gtsummary'
+          , 'forcats'
+          , 'survival'  # These are packages used from Dexter for the survivorship curve
+          , 'ggsurvfit' # These are packages used from Dexter for the survivorship curve
+          , 'gtsummary' # These are packages used from Dexter for the survivorship curve
+          )     
+
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+```
+
+# 1. Analysis Prepartion 
+```{r}
+# 1. Reading in the final giveaway data set
+Final_Giveaway_Y2017_Y2024 <-
+  st_read("input_data/Final_Giveaway_Y2017_Y2024.gpkg") |>
+  st_drop_geometry()
+  
+# 2. Developing the code generally used for the survivorship study 
+General_FY_BY_Giveaway_Y2017_Y2024 <-
+  Final_Giveaway_Y2017_Y2024 |>
+  filter(Site_Type %in% c("Front Yard", "Backyard")) |>
+  # dplyr::select(-starts_with("Census"), -starts_with("Parcel")) |> #Why I gave them the prefixes earlier :)
+  group_by(Identifier) |>
+  filter(
+    any(
+      # Case 1: Tree observed at both Time 1 and Time 2
+      Survival_Has_T1_Observation & Survival_Has_T2_Observation | #or
+      # Case 2: Seen in T1 and dead at T1
+      (Survival_Has_T1_Observation & Survival_Status == 1 & Survival_Inspection == 1) | #or
+      # Case 3: Seen in T2 (alive, so alive before)
+      (Survival_Status == 0 & Survival_Inspection == 2)
+    , na.rm = TRUE)
+  ) |>
+  ungroup()
+
+# 3. Creating simpler code for the Chi Square tests
+## a) Ensuring accurate accounting in T1 and T2
+### i] Correcting T1 | Making sure to account for NAs in T1 (never surveyed) that were found to be alive in T2
+FY_BY_Giveaway_Alive_T1 <- 
+  General_FY_BY_Giveaway_Y2017_Y2024 |>
+  filter(
+     Year_Surveyed == 2017   # Only for those in 2017     
+   , is.na(Mortality_Status) # Those without a mortality status         
+   , Survival_Status == 0    # Those that had a survey 2 that did not elicit an event        
+  )
+
+Vector_Giveawy_Alive_T1 <-
+  unique(FY_BY_Giveaway_Alive_T1$Identifier)
+
+Vector_Giveawy_Alive_T1
+
+### ii] Correcting T2 | Making sure to remove those that were marked as dead in T1 and again marked dead in T2 (since that'd be double counting!)
+FY_BY_Giveaway_Dead_T2 <- 
+  General_FY_BY_Giveaway_Y2017_Y2024 |>
+  group_by(Identifier) |>
+  summarise(
+    Dead_T1 = any(Mortality_Status %in% c("Standing Dead","Removed","Stump") & Time_Period == "Time 1") # Finding those dead in T1
+  , Dead_T2 = any(Mortality_Status %in% c("Standing Dead","Removed","Stump") & Time_Period == "Time 2") # Finding those dead in T2
+  ) |>
+  filter(Dead_T1 & Dead_T2)
+
+Vector_Giveaway_Dead_T2 <-
+  unique(FY_BY_Giveaway_Dead_T2$Identifier)
+
+Vector_Giveaway_Dead_T2
+
+## b) Preparing the data for the Chi Square
+Chi_Fisher_Giveaway_Y2017_Y2024 <-
+  General_FY_BY_Giveaway_Y2017_Y2024 |>
+  mutate(City = ifelse(City == "CHELSEA", "Chelsea", "Holyoke")) |> #I have checked preemptively and these are the only two ones available
+  mutate(
+     Yard = fct_recode(Site_Type #using fct_recode since making factors and setting names
+                    , "Front" = "Front Yard"
+                    , "Back" = "Backyard"
+                    ) 
+    , Time = case_when(
+      Time_Period == "Time 1" ~ "T1"
+    , Time_Period == "Time 2" ~ "T2"
+    , TRUE ~ NA_character_
+    )
+    , Status = case_when(
+      Identifier %in% Vector_Giveaway_Dead_T2 & Time == "T2" ~ NA_character_ # Avoids double counting
+    , Identifier %in% Vector_Giveawy_Alive_T1 & Time == "T1" ~ "Alive"
+    , Mortality_Status %in% c("Standing Dead", "Removed", "Stump") ~ "Dead" # In general dead
+    , Mortality_Status == "Alive" ~ "Alive" # Reiterating if it is alive, it is alive
+    , TRUE ~ Mortality_Status 
+    )
+    , city = factor(City, levels = c("Chelsea","Holyoke"))
+  ) |>
+ dplyr::select(Identifier, City, Yard, Time, Status) |>
+  filter(!is.na(Status)) #If you filter for just these ones, it shows 5 :) | Code works perfectly from my understanding
+```
+
+# 2. Chi Square Tests & Fisher Tests
+- Learned this after getting some warnings from my chi squares when sample size was too small. When cell counts are lower than five, we ought to use the Fisher test. However, when cell counts are higher than five, chi squares become more ideal: https://www.ccjm.org/content/84/9_suppl_2/e20 & https://medium.com/@alb.formaggio/chi-square-and-fishers-test-does-it-really-matter-614a8cb937af
+
+## a) Overall Survivorship Test
+```{r}
+# 1. Creating the table for counts | Time and survivorship
+Chi_Fisher_Giveaway_Y2017_Y2024 |>
+   tabyl(Time, Status) |>
+  adorn_totals("row") 
+
+# 2. Creating the table for percentages | Time and survivorship
+Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  tabyl(Time, Status) |>
+  adorn_totals("row") |>
+  adorn_percentages("col") |>
+  adorn_pct_formatting(digits = 1)
+
+# 3. Running the Chi Square Test
+Survivorship_Chi_Square <-
+  chisq.test(table(Chi_Fisher_Giveaway_Y2017_Y2024$Time, Chi_Fisher_Giveaway_Y2017_Y2024$Status))
+
+Survivorship_Chi_Square
+
+# 4. Takeaways
+# - The p-value is very high (p =.7522). The issue is that there is very small amount of additional deaths in T2. This may lead to why the relationship is not statistically significant. The above will likely be a continued issue going forward.
+```
+
+## b) Front yard and Backyard
+```{r}
+# 1. Create the table for counts | Yard, time, and survivorship
+Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  count(Time, Yard, Status) |>
+  tidyr::pivot_wider(names_from = Status
+                    , values_from = n)
+
+# 2. Create the table for percentages | Yard, time, and survivorship
+Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  count(Time, Yard, Status, name = "n") |>
+  pivot_wider(names_from = Status
+            , values_from = n) |>
+  mutate(Total = Alive + Dead
+       , `Alive (%)` = 100*(Alive/Total)
+       , `Dead (%)`  = 100*(Dead/Total)
+  ) |>
+  dplyr::select(Time, Yard, Total, `Alive (%)`, `Dead (%)`)
+
+# 3. Running the Fisher tests
+## a) Time 1 Fisher Test
+T1_Yard_Fisher_Data <-
+  Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  filter(Time == "T1")
+  
+T1_Yard_Fisher <-
+  fisher.test(table(T1_Yard_Fisher_Data$Yard, T1_Yard_Fisher_Data$Status))
+
+## a) Time 2 Fisher Square 
+T2_Yard_Fisher_Data <-
+  Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  filter(Time == "T2")
+  
+T2_Yard_Fisher <-
+  fisher.test(table(T2_Yard_Fisher_Data$Yard, T2_Yard_Fisher_Data$Status))
+
+T1_Yard_Fisher
+T2_Yard_Fisher
+
+# 4. Takeaways
+# - The p-value remains relatively high: T1 (p = .6523), T2 (p = ,4526). There is high survivorship regardless of placement of the tree; again, attributed to the small sample size and number of deaths (overall, a lot of trees are doing well)
+```
+
+## c) City
+```{r}
+# 1. Create the table for counts | City, time, and survivorship
+Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  count(Time, City, Status) |>
+  tidyr::pivot_wider(names_from = Status
+                    , values_from = n)
+
+# 2. Create the table for percentages | City, time, and survivorship
+Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  count(Time, City, Status, name = "n") |>
+  pivot_wider(names_from = Status
+            , values_from = n) |>
+  mutate(Total = Alive + Dead
+       , `Alive (%)` = 100*(Alive/Total)
+       , `Dead (%)`  = 100*(Dead/Total)
+  ) |>
+  dplyr::select(Time, City, Total, `Alive (%)`, `Dead (%)`)
+
+# 3. Running the Fisher tests
+## a) Time 1 Fisher Test
+T1_City_Fisher_Data <-
+  Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  filter(Time == "T1")
+  
+T1_City_Fisher <-
+  fisher.test(table(T1_City_Fisher_Data$City, T1_City_Fisher_Data$Status))
+
+## b) Time 2 Fisher Square 
+T2_City_Fisher_Data <-
+  Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  filter(Time == "T2")
+  
+T2_City_Fisher <-
+  fisher.test(table(T2_City_Fisher_Data$City, T2_City_Fisher_Data$Status))
+
+T1_City_Fisher
+T2_City_Fisher
+
+# 4. Takeaways
+# - The p-value is relatively questionable here: T1 (p = .06), T2 (p = 1.0). First, the dataset seems very unstable based off of the values calculated. It may be that there is significantly more death in Holyoke compared to Chelsea but this becomes negligible. 
+```
+
+## d) Yard and City Interaction Effects
+```{r}
+# 0. Since values are so low, decided not to run a Chi Square/Fisher Test here. Instead, I will just having reporting tables
+
+# 1. Create the table for counts | City, time, yard, and survivorship
+Chi_Fisher_Giveaway_Y2017_Y2024 |>
+  count(Time, City, Yard, Status) |>
+  pivot_wider(
+     names_from = Status
+   , values_from = n
+  ) |>
+  arrange(Time, City, Yard) |>
+  mutate(Dead = ifelse(is.na(Dead), 0, Dead))
+
+# 2. Create the table for percentage | City, time, yard, and Survivorship
+Chi_Fisher_Giveaway_Y2017_Y2024 |> 
+  count(Time, City, Yard, Status, name = "n") |>
+  tidyr::pivot_wider(
+    names_from = Status
+  , values_from = n
+  ) |>
+  mutate(Dead = ifelse(is.na(Dead), 0, Dead)) |>
+  mutate(
+     Total = Alive + Dead
+   , `Alive (%)` = round(100 * (Alive / Total), 1)
+   , `Dead (%)`  = round(100 * (Dead  / Total), 1)
+  ) |>
+  dplyr::select(Time, City, Yard, Total, `Alive (%)`, `Dead (%)`) |>
+  arrange(Time, City, Yard)
+
+```
+
+
+
+
+# 3. Survivorship Curves
+Decided to create survivorship curves because of all of the previous effort done earlier. However, I understand there is no quantifiable significance here.
+```{r}
+# 1. Building the survival-ready long dataframe
+survival_curve_data <-
+  General_FY_BY_Giveaway_Y2017_Y2024 |>
+  transmute( #Just learned about this, cool since its like a combination of select & mutate
+    Identifier   = Identifier
+  , City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
+  , Yard = fct_recode(Site_Type, "Front" = "Front Yard", "Back" = "Backyard")
+  , Time = as.numeric(Survival_Days_In_Ground)
+  , Event = Survival_Status # Calculated in the First step | Equivalent to Dexter's bin where 0 is alive and 1 is something happened
+  ) |>
+  filter(!is.na(Time) # Keeps rows where time is not missing
+        , !is.na(Event) # Makes sure that it has some sort of event status
+        , !is.na(Yard) # Ensures only those that are Backyard or Front yard
+        ) |>
+  distinct() # Since they are duplicates and cna remove
+
+# 2. Overall Giveaway Kaplan-Meier Model
+## a) Creating the model
+Overall_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ 1, data = survival_curve_data) # tried piping but didn't work
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  coord_cartesian(xlim = c(0, 3000) # Clipping to not show a huge drop; choose 3000 since it was the "highest" number that did not lead to a huge drop across all models
+                , ylim = c(0.9, 1)) + # .90 for high survivorship in general
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Overall Survivorship Curve for Frontyard and Backyard Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" #Thanks for the \n inline suggestion
+  ) # Is the end supposed to all drop to 0? - clipped it later but need suggestion/tip
+  
+# 3. City Giveaway Kaplan-Meier Model
+## a) Creating the model
+City_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ City, data = survival_curve_data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(City_Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  coord_cartesian(xlim = c(0, 3000) # Clipping to not show a huge drop; choose 3000 since it was the "highest" number that did not lead to a huge drop across all models
+                , ylim = c(0.9, 1)) +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "City-based Survivorship Curve for Frontyard and Backyard Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" 
+  ) # Why is only Holyoke dropping to 0?
+  
+# 4. Yard Giveaway Kaplan-Meier Model
+## a) Creating the model
+Yard_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Yard, data = survival_curve_data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Yard_Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  coord_cartesian(xlim = c(0, 3000) # Clipping to not show a huge drop; choose 3000 since it was the "highest" number that did not lead to a huge drop across all models
+                , ylim = c(0.9, 1)) +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Yard-based Survivorship Curve for Frontyard and Backyard Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" 
+  ) 
+
+# 5. Analysis of strength of these models (will be small), particularly those that had a grouping
+## a) City
+survdiff(Surv(Time, Event) ~ City, data = survival_curve_data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+
+## b) Yard
+survdiff(Surv(Time, Event) ~ Yard, data = survival_curve_data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+
+# Takeaways: City has an overall low p-value; but due to the low number of citings, it might not be worth using or mentioning with caution. However, I think that completes the front yard-backyard analysis
+
+```
+
+End takeaways:
+- This is a bit of a yikes since the data set was overall to small, specifically for the "landscape mullets" concept to see if there was any discernible trend. I did enjoy the data analysis part but had challenges overall with grappling with what this mean (which feels like not much)
+- For following steps for thesis, I might want to step a bit more broadly. Instead of limiting the dataset to just the observations in FY BY, I can see if generally survivorship (which these curves are cool but need more fleshing out) are generally impacted by factors like property parcel value, education, etc. Maybe that could be the next thing I complete this week so I can start writing. 
+  - Currently, I belive I am unable to ask questions concerning income and landscape mullet just due to the size of the dataset.
+
+

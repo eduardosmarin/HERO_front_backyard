@@ -1,0 +1,1372 @@
+---
+title: "EVST 4960 Data Wrangling"
+subtitle: "Creating the Final Product for the Data Analysis"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+# 0. Loading the packages
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Loading all packages
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          # , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'tidycensus' # tidy census package
+          , 'tidygeocoder' # geo coding
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          , 'shiny'
+          , 'leafsync'  # linked maps
+          , 'openxlsx'
+          , 'readxl'
+          )     
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+
+# 3. Items for tidy census
+census_api_key('58fc555c77c229747ade7d9fe50e7c71297cf91a', install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+options(tigris_use_cache = TRUE)
+```
+
+Outline of objectives
+ 1. Home values
+ 2. Census
+ 3. General Tree Giveaways
+ 4. iTree
+ 5. Final combinination
+ 6. Testings
+ 7. Archives
+
+# 1. Property Data: Downloading, cleaning, and subsetting property data for Holyoke, MA and Chelsea, MA (2019 and 2023)
+```{r Property Data for Holyoke, MA and Chelsea, MA, echo=FALSE, message=FALSE}
+# --- Running Notes --- #
+# The data was downloaded from ArcGIS using the Table to Excel tool since it was difficult to read the      additional attribute table using SF in R
+# For the inflation data, U.S. Bureau Labor of Statistics was used, particularly from the years 2019 and    2023 to be able to get the value needed for comparisons:           https://www.bls.gov/regions/northeast/data/consumerpriceindex_boston_table.htm
+# The identifier for these parcels is the Location_ID. Since the data is being saved out for each individual year, the assumption was that there should be no worries about unification or subdivision of lots, especially since the join will be year and city separate
+# --------------------- #
+
+# 1. Cleaning | Creating the standardized names to apply for the dataset
+Standard_Names <- c(
+  "Unique_ID","Property_ID","Location_ID","Building_Value_Adjusted_2023","Land_Value_Adjusted_2023","Other_Value_Adjusted_2023","Total_Value_Adjusted_2023",
+  "Year","Lot_Size","Lot_Date","Lot_Price_Adjusted_2023","Use_Code","Site_Address","Address_Number",
+  "Full_Street","Location","City","Zip","OWNER1","OWN_ADDR","OWN_CITY",
+  "OWN_STATE","OWN_ZIP","OWN_CO","LS_BOOK","LS_PAGE","REG_ID","Zoning",
+  "Year_Built","Building_Area","Units","Residential_Area","Style","Stories","Number_Rooms",
+  "Lot_Units","CAMA_ID","Town_ID"
+)
+
+# 2. Spatial & Categorical Data | Downloading the categorical and spatial data
+## a. Creating the Chelsea (2019) Shapefile
+Chelsea_Property_Data_Append_Y2019 <-
+    read_excel("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Assessments_All_Table_to_Excel.xlsx"
+            , sheet = "Chelsea_2019"
+            , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
+    setNames(Standard_Names) |>
+    dplyr::select(1:18, 28:36,38) |>
+    mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
+                  Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
+                  Residential_Area, Units, Number_Rooms, Stories),
+                as.double)) |>
+    mutate(across(Lot_Date, ymd)) |>
+    mutate( 
+      Building_Value_Adjusted_2023 = Building_Value_Adjusted_2023*(326.016/281.082) # <- The value from inflation
+    , Land_Value_Adjusted_2023 = Land_Value_Adjusted_2023*(326.016/281.082)
+    , Other_Value_Adjusted_2023 = Other_Value_Adjusted_2023*(326.016/281.082)
+    , Total_Value_Adjusted_2023 = Total_Value_Adjusted_2023*(326.016/281.082)
+    , Lot_Price_Adjusted_2023 = Lot_Price_Adjusted_2023*(326.016/281.082)
+    ) |>
+  mutate(Year_Dataset = "2019") |>
+  rename_with(~ paste0("Parcel_", .x)) |>
+  mutate(Time_Period = "Time 1") |>
+  dplyr::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+      
+Chelsea_Property_Data_Y2019 <-
+  st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Chelsea_CY19_FY19/M057TaxPar_CY19_FY19.shp") |>
+  rename(Parcel_Location_ID = LOC_ID) |>
+  dplyr::select(4, 13) |>
+  left_join(Chelsea_Property_Data_Append_Y2019, by = "Parcel_Location_ID") 
+
+## b. Creating the Chelsea (2023) Shapefile
+Chelsea_Property_Data_Append_Y2023 <-
+    read_excel("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Assessments_All_Table_to_Excel.xlsx"
+            , sheet = "Chelsea_2023"
+            , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
+    setNames(Standard_Names) |>
+    dplyr::select(1:18, 28:36,38) |>
+    mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
+                  Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
+                  Residential_Area, Units, Number_Rooms, Stories),
+                as.double)) |>
+    mutate(across(Lot_Date, ymd)) |>
+    mutate(Year_Dataset = "2023") |>
+   rename_with(~ paste0("Parcel_", .x)) |>
+    mutate(Time_Period = "Time 2") |>
+  dplyr::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+
+Chelsea_Property_Data_Y2023 <-
+  st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Chelsea_CY23_FY24/M057TaxPar_CY23_FY24.shp") |>
+  rename(Parcel_Location_ID = LOC_ID) |>
+  dplyr::select(4, 13) |>
+  left_join(Chelsea_Property_Data_Append_Y2023, by = "Parcel_Location_ID") 
+  
+## c. Creating the Holyoke (2019) Shapefile
+Holyoke_Property_Data_Append_Y2019 <-
+    read_excel("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Assessments_All_Table_to_Excel.xlsx"
+            , sheet = "Holyoke_2019"
+            , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
+    setNames(Standard_Names) |>
+    dplyr::select(1:18, 28:36,38) |>
+    mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
+                  Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
+                  Residential_Area, Units, Number_Rooms, Stories),
+                as.double)) |>
+    mutate(across(Lot_Date, ymd)) |>
+    mutate(Year_Dataset = "2019") |>
+    mutate( 
+      Building_Value_Adjusted_2023 = Building_Value_Adjusted_2023*(326.016/281.082) # <- The value from inflation
+    , Land_Value_Adjusted_2023 = Land_Value_Adjusted_2023*(326.016/281.082)
+    , Other_Value_Adjusted_2023 = Other_Value_Adjusted_2023*(326.016/281.082)
+    , Total_Value_Adjusted_2023 = Total_Value_Adjusted_2023*(326.016/281.082)
+    , Lot_Price_Adjusted_2023 = Lot_Price_Adjusted_2023*(326.016/281.082)
+    ) |>
+  rename_with(~ paste0("Parcel_", .x)) |>
+  mutate(Time_Period = "Time 1") |>
+  dplyr::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+      
+Holyoke_Property_Data_Y2019 <-
+  st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Holyoke_CY19_FY20/M137TaxPar_CY19_FY20.shp") |>
+  rename(Parcel_Location_ID = LOC_ID) |>
+  dplyr::select(4, 13) |>
+  left_join(Holyoke_Property_Data_Append_Y2019, by = "Parcel_Location_ID") 
+
+## d. Creating the Holyoke (2023) Shapefile
+Holyoke_Property_Data_Append_Y2023 <-
+    read_excel("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Assessments_All_Table_to_Excel.xlsx"
+            , sheet = "Holyoke_2023"
+            , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
+   setNames(Standard_Names) |>
+    dplyr::select(1:18, 28:36,38) |>
+    mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
+                  Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
+                  Residential_Area, Units, Number_Rooms, Stories),
+                as.double)) |>
+    mutate(across(Lot_Date, ymd)) |>
+    mutate(Year_Dataset = "2023") |>
+    rename_with(~ paste0("Parcel_", .x)) |>
+    mutate(Time_Period = "Time 2") |>
+  dplyr::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+
+Holyoke_Property_Data_Y2023 <-
+  st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Holyoke_CY23_FY23/M137TaxPar_CY23_FY23.shp") |>
+  rename(Parcel_Location_ID = LOC_ID) |>
+  dplyr::select(4, 13) |>
+  left_join(Holyoke_Property_Data_Append_Y2023, by = "Parcel_Location_ID") 
+
+```
+
+# 2. Census Data: Downloading and cleaning for Holyoke, MA and Chelsea, MA (2017 and 2023)
+```{r Census Data for Holyoke, MA and Chelsea, MA, echo=FALSE, message=FALSE}
+# 0. Archived: Census and Address Code for Geopackages # Refer to this
+
+# 1. Reading CBGs in 2017 and 2023 in Holyoke, MA and Chelsea, MA
+Massachusetts_CBG_Data_Y2017 <-
+st_read("input_data/General/Massachusetts_CBG_Data_Y2017.gpkg")
+
+Massachusetts_CBG_Data_Y2023 <-
+st_read("input_data/General/Massachusetts_CBG_Data_Y2023.gpkg")
+
+# 2. Reading Holyoke, MA and Chelsea, MA boundaries 
+## a. Reading the Holyoke boundary
+Holyoke_Boundary <-
+  st_read("input_data/Holyoke/Boundaries/holyoke_boundary.gpkg") |>
+  st_transform(st_crs(Massachusetts_CBG_Data_Y2017)) # They both have the same projections so it doesn't matter
+
+## b. Reading the Chelsea boundary
+Chelsea_Boundary <-
+  st_read("input_data/Chelsea/Boundaries/chelsea_boundary.gpkg") |>
+  st_transform(st_crs(Massachusetts_CBG_Data_Y2017)) # Likewise, they both have the same projections so it shouldn't matter
+
+# 3. Sub selecting the Holyoke, MA and Chelsea, MA specific block 
+## b. Figuring this out for Chelsea Y2017
+Chelsea_CBG_Data_Y2017 <-
+  Massachusetts_CBG_Data_Y2017[
+  st_intersects(Massachusetts_CBG_Data_Y2017, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
+  filter(!Census_GEOID %in% c("250173424023", "250173424024", "250173426002", "250173421014",
+      "250173421013", "250251701023", "250251701013", "250251706012"
+      , "250173424004", "250251701003", "250251701006" #These three need to be added for 2017 for some reasons
+      )) |>
+  st_transform(st_crs(Chelsea_Property_Data_Y2019)) 
+
+## b. Figuring this out for Chelsea Y2023
+Chelsea_CBG_Data_Y2023 <-
+  Massachusetts_CBG_Data_Y2023[
+  st_intersects(Massachusetts_CBG_Data_Y2023, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
+  filter(!Census_GEOID %in% c("250173424023", "250173424024", "250173426002", "250173421014",
+      "250173421013", "250251701023", "250251701013", "250251706012")) |> # Could also use %nin%
+  st_transform(st_crs(Chelsea_Property_Data_Y2023)) 
+  
+#-# Double checked both of these: they seem good above!
+## c. Figuring this out for Holyoke Y2017
+Holyoke_CBG_Data_Y2017 <-
+  Massachusetts_CBG_Data_Y2017[
+  st_intersects(Massachusetts_CBG_Data_Y2017, Holyoke_Boundary, sparse = FALSE)[, 1],
+] |>
+  filter(!Census_GEOID %in% c(
+    "250138122021", "250138111023", "250138111022", "250138111021",
+    "250138111012", "250138111024", "250138111011", "250138113013",
+    "250158211012", "250158211014", "250158213001", "250158225004",
+    "250158211012", "250158213003", "250158223001", "250158225004",
+    "250138125004", "250158224012", "250158214004"
+    , "250138122022" #This one needed to be added for 2017 for some reasons
+  )) |>
+  st_transform(st_crs(Holyoke_Property_Data_Y2019))
+
+## c. Figuring this out for Holyoke Y2023
+Holyoke_CBG_Data_Y2023 <-
+  Massachusetts_CBG_Data_Y2023[
+  st_intersects(Massachusetts_CBG_Data_Y2023, Holyoke_Boundary, sparse = FALSE)[, 1],
+] |>
+  filter(!Census_GEOID %in% c(
+    "250138122021", "250138111023", "250138111022", "250138111021",
+    "250138111012", "250138111024", "250138111011", "250138113013",
+    "250158211012", "250158211014", "250158213001", "250158225004",
+    "250158211012", "250158213003", "250158223001", "250158225004",
+    "250138125004", "250158224012", "250158214004"
+  )) |>
+  st_transform(st_crs(Holyoke_Property_Data_Y2023)) 
+
+```
+
+# 3. Preliminary Giveaway Data: Cleaning and making it ready for the survivorship study for Holyoke, MA and Chelsea, MA (2017 and 2024)
+```{r Preliminary Data for Holyoke, MA and Chelsea, MA, echo=FALSE, message=FALSE}
+# 1. Reading in all the simple spreadsheets 
+## a) Reading in the Chelsea, MA Giveaway Spreadsheet
+Pre_Chelsea_Giveaways <-
+  read_csv("input_data/Chelsea/Tree Giveaways/2017CorrectedChelseaAllTreesComplete.csv")
+
+## b) Reading in the Holyoke, MA Giveaway Spreadsheet
+Pre_Holyoke_Giveaways <-
+  read_csv("input_data/Holyoke/Tree Giveaways/holy_random_clean_fixed.csv") 
+
+# 2. Cleaning early the datasets Chelsea, MA and Holyoke, MA before Giveaway data
+## a) Renaming and simple cleaning the Chelsea, MA Dataset
+Pre_Chelsea_Giveaway_Data_Y2017_Y2024 <-
+  Pre_Chelsea_Giveaways |>
+    rename(
+      Date_Planted                 = DATEPLANTE
+    , Address                      = nw_ddrs
+    , Public_Private               = GGC_PUB
+    , Comment_General              = COMMENT
+    , Cultivar                     = Cultivar
+    , Year_Planted                 = GGC_YEA
+    # , Season_Planted               = GGC_SEA
+    , City                         = CITY_GG
+    , Family                       = Family
+    , Genus                        = Genus
+    , Deciduous_Evergreen          = Deciduous 
+    , Broadleaf_Conifer            = Broadleaf
+    , Species                      = Species
+    , Native_Status                = Native_Sta
+    , Height_2017                  = Hght_17 # EM: Still needs cleaning if you want to use
+    , Owner_Address_P1             = ADDRESS # Needs double checking here
+    , Owner_Address_P2             = OWNERAD # Needs standardization
+    , Basal_Sprouts_2017           = BSp_17
+    , Comment_Survey_2017          = Cmmnt_1
+    , DBH_2017                     = DBH1_17
+    , Mortality_Status_2017        = M_17
+    , Vigor_2017                   = V_17
+    , Land_Use_2017                = LUse_17
+    # , Site_Type_2017               = StTp_17  
+    , Width_2017                   = Wth_17
+    , Common_Name                  = CommonName
+    , Unique_ID                    = NewTrID 
+    , Site_Type                    = StTp_24
+    , Land_Use_2024                = LUse_24
+    , Basal_Sprouts_2024           = Bsp_24 # Seems to be less comprehensive
+    , Vigor_2024                   = V_24
+    , Conditions_2024              = Con_24 # Condition for all the years
+    , Comment_Survey_2024          = Com_24
+    , DBH_2024                     = DBH1_24
+    , Height_2024                  = Hgt_24
+    , Width_2024                   = Wth_24
+    , Mortality_Status_2024        = M_24
+    , Date_Surveyed_2024           = D_24
+    # , Date_Inserted                = CreationDate
+    # , Author_Inserted              = Creator
+    # , Date_Edited                  = EditDate
+    # , Author_Edited                = Editor
+    , Easting                      = X
+    , Northing                     = Y
+  ) |>
+  mutate(Date_Surveyed_2017 = NA_character_) |>
+  dplyr::select (
+      Unique_ID              
+    , Address                  
+    # , Owner_Address_P1             
+    # , Owner_Address_P2             
+    , City                         
+    , Date_Planted
+    , Date_Surveyed_2017
+    , Date_Surveyed_2024
+    # , Year_Planted
+    # , Season_Planted               
+    , Family                       
+    , Genus                        
+    , Species                      
+    , Cultivar                     
+    , Common_Name                  
+    , Native_Status                
+    , Deciduous_Evergreen          
+    , Broadleaf_Conifer            
+    , Public_Private    
+    , Land_Use_2017
+    , Land_Use_2024
+    # , Site_Type_2017  
+    , Site_Type     
+    , Vigor_2017
+    , Vigor_2024     
+    , Mortality_Status_2017
+    , Mortality_Status_2024
+    # , Conditions_2017 This does not seem to exist
+    , Conditions_2024         
+    , DBH_2017
+    , DBH_2024     
+    , Height_2017
+    , Height_2024    
+    , Width_2017
+    , Width_2024 
+    , Basal_Sprouts_2017
+    , Basal_Sprouts_2024   
+    , Comment_General              
+    , Comment_Survey_2017             
+    , Comment_Survey_2024          
+    , Easting                      
+    , Northing                     
+  ) |>
+  mutate(
+     Date_Planted       = mdy(Date_Planted)  #Need this for "Time_in_Ground"
+   , Date_Surveyed_2017 = mdy(Date_Surveyed_2017)
+  ) |>
+  mutate(
+    Date_Surveyed_2024 = str_trim(Date_Surveyed_2024) # Removes extra spaces / might not need this
+  , Date_Surveyed_2024 = str_replace(Date_Surveyed_2024, " .*$", ""), # Finds the first space and deletes everything afterwards
+  , Date_Surveyed_2024 = mdy(Date_Surveyed_2024) # Puts it in MYD
+  ) |>
+ slice(-1500) #Removing one extra 774 unique_id from our dataset
+
+## a) Renaming and simple cleaning the Holyoke, MA Dataset
+# 2. Overview of all the variables (including all of the years surveyed)
+Pre_Holyoke_Giveaway_Data_Y2017_Y2024 <-
+  Pre_Holyoke_Giveaways |> 
+    rename(
+      # Unique_ID                  = OID_
+      Date_Planted                 = DATEPLANTE
+      # New_Address                = nw_ddrs
+    , Public_Private               = Pub_Priv
+      # Comment_General            = COMMENT
+    , Cultivar                     = Cultivar
+    # , Year_Planted               = GGC_SEA
+      # City                       = CITY_GG
+    , Family                       = Family
+    , Genus                        = Genus
+    , Deciduous_Evergreen          = Deciduous
+      # Broadleaf_Conifer          = Broadleaf
+    , Species                      = Species
+    , Site_Type                    = StTp_24 #EM: PLEASE NOTE FOR DEXTER THIS IS STRANGE!
+    , Native_Status                = Native_Sta
+    # , DBH_2021_2023              = DBH_dcr
+    , Height_2017                  = Hgt_17 # EM: Needs cleaning if time affords
+    # , Owner_Address_P1           = ADDRESS 
+    # , Owner_Address_P2           = OWNERAD 
+    , Basal_Sprouts_2017           = BSp_17
+      # Comment_Planting           = Cmmnt_1
+    , DBH_2017                     = DBH1_17
+    , Mortality_Status_2017        = M_17
+    , Vigor_2017                   = V_17
+    , Land_Use_2017                = LUse_17
+    # , Site_Type_2017               = StTp_17  
+    , Width_2017                   = Wth_17
+    , Common_Name                  = commonName
+    , Unique_ID                    = NewTreeID 
+    , Land_Use_2024                = LUse_24
+    , Basal_Sprouts_2024           = BSp_24 # Seems to be less comprehensive
+    , Vigor_2024                   = V_24
+    , Conditions_2024              = Con_24 # Condition for all the years
+      # Comment_Survey_2024        = Com_24
+    , DBH_2024                     = DBH1_24
+    , Height_2024                  = Hgt_24
+    , Width_2024                   = Wth_24
+    , Mortality_Status_2024        = M_24
+    , Date_Surveyed_2017           = Observe_17
+    , Date_Surveyed_2024           = Date_24
+    , Northing                     = lat  
+    , Easting                      = long 
+    ) |>
+   mutate(City = "HOLYOKE"                      # Need to add for the bind and select in the future
+       , Broadleaf_Conifer = NA_character_
+       , Comment_General = NA_character_
+       , Comment_Survey_2017 = NA_character_
+       , Comment_Survey_2024 = NA_character_
+       , Address = NA_character_
+   ) |>
+  dplyr::select (
+      Unique_ID                
+    , Address                  
+    # , Owner_Address_P1             
+    # , Owner_Address_P2             
+    , City
+    , Date_Planted    
+    # , Year_Planted
+    , Date_Surveyed_2017
+    , Date_Surveyed_2024
+    , Family                       
+    , Genus                        
+    , Species                      
+    , Cultivar                     
+    , Common_Name                  
+    , Native_Status                
+    , Deciduous_Evergreen          
+    , Broadleaf_Conifer            
+    , Public_Private   
+    , Land_Use_2017
+    , Land_Use_2024 
+    # , Site_Type_2017
+    , Site_Type  
+    , Vigor_2017
+    , Vigor_2024              
+    , Mortality_Status_2017   
+    , Mortality_Status_2024   
+    # , Conditions_2017 There does not seem to be a conditions in 2017
+    , Conditions_2024
+    , DBH_2017 
+    , DBH_2024    
+    , Height_2017  
+    , Height_2024  
+    , Width_2017  
+    , Width_2024 
+    , Basal_Sprouts_2017  
+    , Basal_Sprouts_2024      
+    , Comment_General
+    , Comment_Survey_2017
+    , Comment_Survey_2024
+    , Easting                      
+    , Northing                     
+  ) |>
+  mutate(
+     Date_Planted       = mdy(Date_Planted)  #Need this for "Time_in_Ground"
+   , Date_Surveyed_2017 = mdy(Date_Surveyed_2017)
+   , Date_Surveyed_2024 = mdy(Date_Surveyed_2024)
+  )
+
+# 3. Getting the lat and long for Chelsea, MA & Holyoke, MA
+## a) Figuring out the Lat and Long Coordinates for Chelsea, MA
+### i) Making it into Massachusetts State Plane, NAD83, feet
+Pre_Chelsea_Giveaway_Coords <- 
+  Pre_Chelsea_Giveaway_Data_Y2017_Y2024 |>
+  st_as_sf(coords = c("Easting", "Northing"), crs = 26986) |>
+  st_transform(crs = 4326)  
+
+### ii) Receiving the coordinates data
+Chelsea_Giveaway_Coords <- 
+  st_coordinates(Pre_Chelsea_Giveaway_Coords)
+
+### iii) Appending the coordinates data 
+Pre_Chelsea_Giveaway_Data_Y2017_Y2024$Longitude <- Chelsea_Giveaway_Coords[,1]
+Pre_Chelsea_Giveaway_Data_Y2017_Y2024$Latitude  <- Chelsea_Giveaway_Coords[,2]
+
+## a) Figuring out the Lat and Long Coordinates and Addresses for Holyoke, MA
+### i) Making it into Massachusetts State Plane, NAD83, feet
+Pre_Holyoke_Giveaway_Coords <- 
+  Pre_Holyoke_Giveaway_Data_Y2017_Y2024 |>
+  st_as_sf(coords = c("Easting", "Northing"), crs = 26986) |>
+  st_transform(crs = 4326)  
+
+### ii) Receiving the coordinates data
+Holyoke_Giveaway_Coords <- 
+  st_coordinates(Pre_Holyoke_Giveaway_Coords)
+
+### iii) Appending the coordinates data 
+Pre_Holyoke_Giveaway_Data_Y2017_Y2024$Longitude <- Holyoke_Giveaway_Coords[,1]
+Pre_Holyoke_Giveaway_Data_Y2017_Y2024$Latitude  <- Holyoke_Giveaway_Coords[,2]
+
+#-# Holyoke, MA needs Address #-#
+# 0. Archived: Census and Address Code for Geopackages # Refer to this
+
+## iv) Reading the address data
+Holyoke_Giveaway_Addresses <-
+  st_read("input_data/Holyoke/Holyoke_Giveaway_Addresses.gpkg"
+  )
+
+### v) Creating new data frame to append
+Holyoke_Short_Label <-
+  Holyoke_Giveaway_Addresses |>
+  dplyr::select(Unique_ID, ShortLabel)
+
+### vi) Appending the data
+Pre_Holyoke_Giveaway_Data_Y2017_Y2024 <-
+  Pre_Holyoke_Giveaway_Data_Y2017_Y2024 |>
+  left_join(Holyoke_Short_Label, by = "Unique_ID") |>
+  mutate(Address = ShortLabel) |>
+  dplyr::select(-ShortLabel)
+
+# 4. Finding the Days since Planted for Chelsea, MA and Holyoke, MA | Chelsea, 2017 is missing 
+## a) Finding the Days since Planted for Holyoke, MA
+Holyoke_Giveaway_Data_Y2017_Y2024 <- 
+  Pre_Holyoke_Giveaway_Data_Y2017_Y2024 |>
+  mutate(
+    Days_Since_Planted_2017 = as.numeric(Date_Surveyed_2017 - Date_Planted)
+  , Days_Since_Planted_2024 = as.numeric(Date_Surveyed_2024 - Date_Planted)
+  )
+
+## b) Finding the Days since Planted for Chelsea, MA
+### i) Double checking if the month where the survey occur are usually one season to be able to extrapolate easier
+Holyoke_Surveyed_Month_Y2017 <-
+  Holyoke_Giveaway_Data_Y2017_Y2024 |>
+  filter(!is.na(Date_Surveyed_2017), !is.na(Days_Since_Planted_2017)) |> 
+  mutate(
+    Month_Number   = month(Date_Surveyed_2017)
+  , Month_Label = month(Date_Surveyed_2017, label = TRUE, abbr = TRUE)
+  ) |>
+  group_by(Month_Label, Month_Number) |>
+  summarise(
+    n = n()
+  , Median_Days_Since_Planted_2017 = median(Days_Since_Planted_2017, na.rm = TRUE), #Seeing which to use: median vs mean
+  , Mean_Days_Since_Planted_2017   = mean(Days_Since_Planted_2017, na.rm = TRUE),
+  , .groups = "drop"
+  ) |>
+  arrange(Month_Number) |>
+  dplyr::select(-Month_Number)
+  
+as.data.frame(Holyoke_Surveyed_Month_Y2017) 
+
+print(Holyoke_Surveyed_Month_Y2017) # Majority in June
+
+### ii) Calculating all of the median survey dates to be able to do the aggregation for Chelsea, MA
+Holyoke_Median_Survey_Y2017 <- # This is to get the base value
+  median(Holyoke_Giveaway_Data_Y2017_Y2024$Date_Surveyed_2017, na.rm = TRUE)
+
+Holyoke_Median_Survey_Y2024 <- # This is for the first part of the offset
+  median(Holyoke_Giveaway_Data_Y2017_Y2024$Date_Surveyed_2024, na.rm = TRUE)
+
+Chelsea_Median_Survey_Y2024 <- # This is for the second part of the offset
+  median(Pre_Chelsea_Giveaway_Data_Y2017_Y2024$Date_Surveyed_2024, na.rm = TRUE)
+
+### iii) Creating the offset to apply for Chelsea, MA and creating date
+Offset_Y2024 <- 
+  as.integer(Chelsea_Median_Survey_Y2024 - Holyoke_Median_Survey_Y2024) 
+
+Chelsea_Median_Survey_Y2017 <- Holyoke_Median_Survey_Y2017 + days(Offset_Y2024)
+
+### iv) Applying all of this data 
+Chelsea_Giveaway_Data_Y2017_Y2024 <-
+  Pre_Chelsea_Giveaway_Data_Y2017_Y2024 |>
+  mutate(
+    Has_Survey_2017 = !is.na(Mortality_Status_2017) & Mortality_Status_2017 != "" #Checking that has a mortality present + and making sure it is not an empty string
+  , Date_Surveyed_2017 = case_when(
+      is.na(Date_Surveyed_2017) & Has_Survey_2017 & !is.na(Date_Planted) ~ if_else(Date_Planted > Chelsea_Median_Survey_Y2017, Date_Planted, Chelsea_Median_Survey_Y2017), #More of a safety check to see if it flags any weird trees that were before the average survey date | None that it flagged
+      TRUE ~ Date_Surveyed_2017
+    )
+  ) |>
+  dplyr::select(-Has_Survey_2017) |>
+  mutate(
+    Days_Since_Planted_2017 = as.numeric(Date_Surveyed_2017 - Date_Planted)
+  , Days_Since_Planted_2024 = as.numeric(Date_Surveyed_2024 - Date_Planted)
+  )
+  
+# 5. Combining both data sheets before and afterwards
+## a) Double checking to make sure they have the same items for curves
+compare_df_cols(Holyoke_Giveaway_Data_Y2017_Y2024, Chelsea_Giveaway_Data_Y2017_Y2024) |>
+  as_tibble() |>
+  print(n = Inf) 
+
+## b) Combining both of the spreadsheets, making it spatial, and creating time long
+Pre_V1_Giveaway_Y2017_Y2024 <-
+  bind_rows(Holyoke_Giveaway_Data_Y2017_Y2024, Chelsea_Giveaway_Data_Y2017_Y2024) |>
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) |>
+   pivot_longer(
+     cols = c(ends_with("_2017"), ends_with("_2024"))
+   , names_to = c(".value", "Year_Surveyed")
+   , names_pattern = "(.*)_(2017|2024)$"
+  ) |>
+  mutate(Time_Period = case_when(
+    Year_Surveyed == "2017" ~ "Time 1"
+  , Year_Surveyed == "2024" ~ "Time 2"
+  , TRUE ~ NA_character_
+  )) |>
+  mutate(Survey_Year_Dataset = Year_Surveyed) |>
+  st_transform(st_crs(Holyoke_Property_Data_Y2023)) 
+
+```
+
+# 4. iTree Data: Cleaning and preparing for Holyoke, MA and Chelsea, MA 
+```{r Additional iTree Data for Holyoke, MA and Chelsea, MA, echo=FALSE, message=FALSE}
+# 1. Making the Broadleaf and Conifers table
+## a. Creating summary table of Broadleaf and Conifers for a join
+Pre_Broadleaf_Conifer_Table_V1 <- 
+  Pre_V1_Giveaway_Y2017_Y2024 |>
+  st_drop_geometry() |>
+  filter(!is.na(Broadleaf_Conifer)) |> 
+  group_by(Species, Broadleaf_Conifer) |>  
+  summarize(Count = n(), .groups = "drop") |> 
+  arrange(Species) |>
+  dplyr::select(-Count) |>
+  rename(Broadleaf_Conifer = Broadleaf_Conifer)
+
+## b. Performing some double checks
+### i) Checking for duplicates
+Pre_Broadleaf_Conifer_Table_V1 |>
+  count(Species) |>
+  filter(n > 1) # All unique
+
+### ii) Checking which species do not have currently a partner 
+Unmatched_Leaf_Species <- 
+  Pre_V1_Giveaway_Y2017_Y2024 |>
+  distinct(Species) |>
+  anti_join(
+    Pre_Broadleaf_Conifer_Table_V1 |> distinct(Species),
+    by = "Species"
+  ) |>
+  arrange((Species))
+Unmatched_Leaf_Species 
+
+## c. Adding the additional ones
+Pre_Broadleaf_Conifer_Table_V2 <- 
+  tribble(
+  ~Species,                      ~Broadleaf_Conifer
+  , "Aesculus hippocastanum"  , "Broadleaf"                     
+  , "Aesculus x carnea"       , "Broadleaf"               
+  , "Amelanchier canadensis"  , "Broadleaf"                 
+  , "Eucommia ulmoides"       , "Broadleaf"             
+  , "Halesia monticola"       , "Broadleaf"             
+  , "Malus x domestica"       , "Broadleaf"           
+  , "Prunus avium"            , "Broadleaf"       
+  , "Prunus persica"          , "Broadleaf"           
+  , "Prunus salicina"         , "Broadleaf"           
+  , "Pyrus communis"          , "Broadleaf"          
+  , "Sorbus alnifolia"        , "Broadleaf"             
+  , "Styrax japonicus"        , "Broadleaf"               
+  , "Thuja plicata"           , "Conifer"         
+  , "Ulmus parvifolia"        , "Broadleaf"             
+  , "Ulmus spp."              , "Broadleaf"
+  )
+
+## d. Combining both tables for my join list
+Broadleaf_Conifer_Table <-
+ bind_rows(
+    Pre_Broadleaf_Conifer_Table_V1
+  , Pre_Broadleaf_Conifer_Table_V2
+    ) 
+
+# 2. Creating the iTree Final Table
+## a. Reading and renaming columns of the 
+Pre_i_Tree_Table_V1 <- 
+  read_excel(
+    "input_data/General/Create_iTree_spp_codes_from_inventory_list.xls.xlsx"
+    , sheet = "i-Tree Species List"
+  ) |>
+ mutate( # This is to make it mergeable
+     Species = str_c(`Genus Name`, `Species Name`, sep = " ")
+  ,  Species = str_to_lower(Species)
+  ,  Species = str_replace(Species, "^\\w", toupper(str_sub(Species, 1, 1)))  # Ensures the first letter is capitalized
+  ) |>
+  rename(Height_Maturity = `Height at Maturity (feet)`
+       , i_Tree_Code        = `Species Code`
+       , Growth_Form        = `Growth Form`
+       , Percent_Leaf_Type  = `Percent Leaf Type`
+       , Leaf_Type          = `Leaf Type`
+       , Growth_Rate        = `Growth Rate`
+       )
+
+## b. Performing some double checks
+### i) Checking for duplicates
+Pre_i_Tree_Table_V1 |>
+  count(Species) |>
+  filter(n > 1) # All unique
+
+### ii) Checking which species do not have currently a partner 
+Unmatched_iTree_Species <- 
+  Pre_V1_Giveaway_Y2017_Y2024 %>%
+  distinct(Species) %>%
+  anti_join(
+    Pre_i_Tree_Table_V1 %>% distinct(Species),
+    by = "Species"
+  )
+Unmatched_iTree_Species 
+
+## c. Creating the index table on an Excel and and reading it in
+Pre_i_Tree_Table_V2 <- 
+  read_excel("input_data/General/i_Tree_Appendix.xls.xlsx"
+           , sheet = "i-Tree Species List"
+           , n_max = 19) |>
+  dplyr::select(1:8)
+# For note, species like Quercus x warei, Prunus x incam, Malus x domestica, & Other [genus spp.] were the only ones without any information. This is due to not being able to find a respective i-Tree value. 
+
+## d. Merging both these trees for potential iTree analysis
+i_Tree_Table <- 
+  bind_rows(
+    Pre_i_Tree_Table_V1
+  , Pre_i_Tree_Table_V2
+    ) |>
+  dplyr::select(-`Genus Name`, -`Species Name`, -Synonym, -Family, -Order, -Class, -`Common Name`)
+```
+
+# 5. Tree Giveaway Data: Merging all datasets and final cleanings for Holyoke, MA and Chelsea, MA (2017 and 2023)
+```{r Final Tree Giveawy for Holyoke, MA and Chelsea, MA}
+# 1. Merging all of the datasets into one | Property and Census specifically
+## a) Preparing the necessary layers needed
+Pre_Parcel_Data_Y2019 <- 
+  bind_rows(Holyoke_Property_Data_Y2019, Chelsea_Property_Data_Y2019) |>
+  dplyr::select(-Time_Period) |>
+  filter(!is.na(Parcel_Unique_ID))
+
+Pre_Parcel_Data_Y2023 <- 
+  bind_rows(Holyoke_Property_Data_Y2023, Chelsea_Property_Data_Y2023) |>
+  dplyr::select(-Time_Period) |>
+  filter(!is.na(Parcel_Unique_ID))
+
+Pre_Census_Data_Y2017 <- 
+  bind_rows(Holyoke_CBG_Data_Y2017, Chelsea_CBG_Data_Y2017) |>
+  dplyr::select(-Time_Period) 
+
+Pre_Census_Data_Y2023 <- 
+  bind_rows(Holyoke_CBG_Data_Y2023, Chelsea_CBG_Data_Y2023) |>
+  dplyr::select(-Time_Period) 
+
+## b. Calculating each giveaway and choosing the largest polygon
+### i) Finding for parcels, which is more challenging since not all are within
+#### 2019, Finding all that joined
+Pre_Giveaways_Parcel_Data_Y2019 <- 
+  Pre_V1_Giveaway_Y2017_Y2024 |>
+  filter(Time_Period == "Time 1") |>
+  st_join(Pre_Parcel_Data_Y2019, left = TRUE, largest = TRUE)
+
+#### 2019, Finding all within
+Within_Giveaways_Parcel_Data_Y2019 <-
+  Pre_Giveaways_Parcel_Data_Y2019 |>
+  filter(!is.na(Parcel_Property_ID)) |>
+  st_drop_geometry() |>
+  dplyr::select(City, Time_Period, Unique_ID, starts_with("Parcel"))
+
+#### 2019, Finding all missing points
+Missing_Giveaways_Parcel_Data_Y2019 <- 
+  Pre_Giveaways_Parcel_Data_Y2019 |>
+  filter(is.na(Parcel_Property_ID))
+
+#### 2019, Finding nearest parcel for missing points
+Nearest_Indexes_Y2019 <- 
+  Missing_Giveaways_Parcel_Data_Y2019 |>
+  st_nearest_feature(Pre_Parcel_Data_Y2019)
+
+#### 2019, Combine IDs with nearest parcel attributes
+Nearest_Giveaways_Parcel_Data_Y2019 <- 
+  Pre_Parcel_Data_Y2019 |> 
+  st_drop_geometry() |>                                      
+  slice(Nearest_Indexes_Y2019) |> # Selecting based on the closest parcels
+  dplyr::select(starts_with("Parcel")) |>                   
+  bind_cols(
+    Missing_Giveaways_Parcel_Data_Y2019 |> 
+      st_drop_geometry() |> 
+      dplyr::select(City, Time_Period, Unique_ID) 
+  )
+
+#### 2019, Merging the Dataset
+Giveaway_Parcel_Data_Y2019 <- 
+  bind_rows(Within_Giveaways_Parcel_Data_Y2019
+          , Nearest_Giveaways_Parcel_Data_Y2019)
+
+#### 2023, Finding all that joined
+Pre_Giveaways_Parcel_Data_Y2023 <- 
+  Pre_V1_Giveaway_Y2017_Y2024 |>
+  filter(Time_Period == "Time 2") |>
+  st_join(Pre_Parcel_Data_Y2023, left = TRUE, largest = TRUE)
+
+#### 2023, Finding all within
+Within_Giveaways_Parcel_Data_Y2023 <-
+  Pre_Giveaways_Parcel_Data_Y2023 |>
+  filter(!is.na(Parcel_Property_ID)) |>
+  st_drop_geometry() |>
+  dplyr::select(City, Time_Period, Unique_ID, starts_with("Parcel"))
+
+#### 2023, Finding all missing points
+Missing_Giveaways_Parcel_Data_Y2023 <- 
+  Pre_Giveaways_Parcel_Data_Y2023 |>
+  filter(is.na(Parcel_Property_ID))
+
+#### 2023, Finding nearest parcel for missing points
+Nearest_Indexes_Y2023 <- 
+  Missing_Giveaways_Parcel_Data_Y2023 |>
+  st_nearest_feature(Pre_Parcel_Data_Y2023)
+
+#### 2023, Combine IDs with nearest parcel attributes
+Nearest_Giveaways_Parcel_Data_Y2023 <- 
+  Pre_Parcel_Data_Y2023 |> 
+  st_drop_geometry() |>                                      
+  slice(Nearest_Indexes_Y2023) |> # Selecting based on the closest parcels
+  dplyr::select(starts_with("Parcel")) |>                   
+  bind_cols(
+    Missing_Giveaways_Parcel_Data_Y2023 |> 
+      st_drop_geometry() |> 
+      dplyr::select(City, Time_Period, Unique_ID) 
+  )
+
+#### 2023, Merging the Dataset
+Giveaway_Parcel_Data_Y2023 <- 
+  bind_rows(Within_Giveaways_Parcel_Data_Y2023
+          , Nearest_Giveaways_Parcel_Data_Y2023)
+
+### i) Finding for census
+Giveaway_Census_Data_Y2017 <- 
+  Pre_V1_Giveaway_Y2017_Y2024 |> 
+  mutate(Temp_Row_ID = row_number()) |>
+  filter(Time_Period == "Time 1") |> 
+  st_join(Pre_Census_Data_Y2017, left = TRUE, largest = TRUE) |> # Selecting the largest
+  st_drop_geometry() |>
+  dplyr::select(City, Time_Period, Unique_ID, starts_with("Census"))
+
+Giveaway_Census_Data_Y2023 <- 
+  Pre_V1_Giveaway_Y2017_Y2024 |> 
+  mutate(Temp_Row_ID = row_number()) |>
+  filter(Time_Period == "Time 2") |> 
+  st_join(Pre_Census_Data_Y2023, left = TRUE, largest = TRUE) |> # Selecting the largest
+  st_drop_geometry() |>
+  dplyr::select(City, Time_Period, Unique_ID, starts_with("Census"))
+
+## c. Merging the columns based on theme
+Giveaway_Parcel_Data_Y2019_Y2023 <-
+  bind_rows(Giveaway_Parcel_Data_Y2019, Giveaway_Parcel_Data_Y2023)
+
+Giveaway_Census_Data_Y2017_Y2024 <-
+  bind_rows(Giveaway_Census_Data_Y2017, Giveaway_Census_Data_Y2023)
+
+## d. Combining all of the them together and some significant cleaning
+Pre_V2_Giveaway_Y2017_Y2024 <-
+  Pre_V1_Giveaway_Y2017_Y2024 |>
+  left_join(Giveaway_Parcel_Data_Y2019_Y2023, by = c("City", "Time_Period", "Unique_ID")) |>
+  left_join(Giveaway_Census_Data_Y2017_Y2024, by = c("City", "Time_Period", "Unique_ID")) 
+
+# 2. Cleaning the final dataset for its final preparation
+Pre_V3_Giveaway_Y2017_Y2024 <-
+  Pre_V2_Giveaway_Y2017_Y2024 |>
+  mutate(Address = str_to_upper(Address)
+       , Public_Private = str_to_title(Public_Private)) |> #Making all the addresses capitals
+  arrange(City, Address) |>
+  mutate(Date_Planted = if_else(is.na(Date_Planted), as.Date("2021-05-19"), Date_Planted)) |> 
+  mutate(
+    Year_Planted = year(Date_Planted),
+    Month = month(Date_Planted),
+    Season_Planted = case_when(
+      Month %in% c(3, 4, 5, 6, 7) ~ "SPRING" #EM: Still need to check with John Rogan 
+    , Month %in% c(8, 9, 10, 11) ~ "FALL" 
+    , TRUE ~ NA_character_      
+    )
+  ) |>
+  dplyr::select(-Month, -Broadleaf_Conifer) |>
+  mutate(Vigor = as.character(Vigor)
+       , Vigor = case_when(
+            Vigor == "1" ~ "100% to 90% Full"
+          , Vigor == "2" ~ "90% to 75% Full"
+          , Vigor == "3" ~ "75% to 50% Full"
+          , Vigor == "4" ~ "50% or less"
+          , Vigor == "5" ~ "Unsure" #EM: Please check your email to double check this
+          , TRUE ~ Vigor)
+       , Site_Type = case_when(
+            Site_Type == "SC" ~ "Sidewalk Cutout"
+          , Site_Type == "BY" ~ "Backyard"
+          , Site_Type == "FY" ~ "Front Yard"
+          , Site_Type == "OM" ~ "Other Maintained"
+          , Site_Type == "SY" ~ "Side Yard"
+          , Site_Type == "MP" ~ "Maintained Park"
+          , Site_Type == "SP" ~ "Sidewalk Planting Strip"
+          , TRUE ~ Site_Type)
+       , Mortality_Status = case_when(
+            Mortality_Status == "SD" ~ "Standing Dead"
+          , Mortality_Status == "A" ~ "Alive"
+          , Mortality_Status == "R" ~ "Removed"
+          , Mortality_Status == "Y" ~ NA_character_ #EM: Please check, not sure what this means
+          , Mortality_Status == "Unknown" ~ NA_character_
+          , TRUE ~ Mortality_Status 
+       )
+       , Land_Use = case_when(
+            Land_Use == "MFR"   ~ "Multi-Family Residential"               
+          , Land_Use == "SFR-D" ~ "Single-Family Detached"               
+          , Land_Use == "SFR-A" ~ "Single-Family Attached"   
+          , Land_Use == "SFR"   ~ "Single-Family General"
+          , Land_Use == "INST"  ~ "Institutional"               
+          , Land_Use == "COMM"  ~ "Commercial"               
+          , Land_Use == "MP"    ~ "Maintained Park"               
+          , Land_Use == "V"     ~ "Vacant"      
+          , Land_Use == "MX"    ~ "Mixed Use"            
+          , Land_Use == "IND"   ~ "Industrial"              
+          , Land_Use == "O"     ~ "Other"            
+          , Land_Use == "TR"    ~ "Transportation"               
+          , Land_Use == "UT"    ~ "Unsure" #EM: Please fix this when push comes to shove
+          , TRUE ~ Land_Use)
+        , General_Location = case_when(
+            Site_Type %in% c("Sidewalk Cutout", "Sidewalk Planting Strip") ~ "Street Trees"
+          , Site_Type %in% c("Backyard", "Front Yard", "Side Yard") ~ "Yard Trees"
+          , Site_Type %in% c("Other Maintained", "Maintained Park") ~ "Maintained Area"
+          , TRUE ~ NA_character_)
+              ) |>
+    left_join(Broadleaf_Conifer_Table, by = "Species") |>
+    left_join(i_Tree_Table, by = "Species")
+# All now is the final step of the ground and then done :)
+
+# 3. Calculating Days in Ground for All Data
+Giveaway_Survival_Data <- 
+  Pre_V3_Giveaway_Y2017_Y2024 |>
+  st_drop_geometry() |>
+  dplyr::select(City, Unique_ID, Date_Planted, Time_Period, Date_Surveyed, Mortality_Status) |>
+  pivot_wider(
+    id_cols     = c(City, Unique_ID, Date_Planted)
+  , names_from  = Time_Period          
+  , values_from = c(Date_Surveyed, Mortality_Status)
+  , names_sep   = "_"
+  ) |>
+  rename(
+     Date_Surveyed_Time_1     = `Date_Surveyed_Time 1`  
+   , Date_Surveyed_Time_2     = `Date_Surveyed_Time 2`   
+   , Mortality_Status_Time_1  = `Mortality_Status_Time 1`
+   , Mortality_Status_Time_2  = `Mortality_Status_Time 2`
+  ) |>
+  filter(!(is.na(Mortality_Status_Time_1) & is.na(Mortality_Status_Time_2)))|> #The issue is this;for some reason, there are present survey dates in the dataset for 2024 that have had no mortality_status taken in either T1 or T2. Because my analysis does not flag NA_, only death events and assumes everything is living otherwise, this is causing significant issues later down in the road when I subset the dataset to only look for T1 Dead | T1 Alive, T2 Dead | T2 Alive
+  # Flag for when to stop counting for the days
+  mutate(
+    Dead_Time_1 = Mortality_Status_Time_1 %in% c("Standing Dead", "Removed", "Stump")
+  , Dead_Time_2 = Mortality_Status_Time_2 %in% c("Standing Dead", "Removed", "Stump")
+  # Selecting the day to stop counting
+  , Inspection_Date = case_when(
+      Dead_Time_1 ~ Date_Surveyed_Time_1 #Dead in 2017, Stop 2017
+    , !Dead_Time_1 & Dead_Time_2 ~ Date_Surveyed_Time_2 #Alive in 2017, Dead in 2024, Stop 2024
+    , TRUE ~ coalesce(Date_Surveyed_Time_2, Date_Surveyed_Time_1)
+    )) |>
+    filter(!is.na(Inspection_Date)) |>
+  mutate(
+  , Days_In_Ground = as.integer(Inspection_Date - Date_Planted) # Calculating based off of the rules set in inspection date
+  # The following is for the survival analysis
+  , Status = case_when(  
+      Dead_Time_1 ~ 1
+    , !Dead_Time_1 & Dead_Time_2 ~ 1
+    , TRUE ~ 0
+    )
+  # Tells us when the date stopped
+  , Inspection = case_when(
+       Dead_Time_1 ~ 1
+     , !Dead_Time_1 & Dead_Time_2 ~ 2
+     , TRUE ~ if_else(!is.na(Date_Surveyed_Time_2), 2, 1)
+    )
+  ) |>
+  mutate( # Need this for later analysis
+    Has_T1_Observation = !is.na(Mortality_Status_Time_1) # has mortality status presence
+  , Has_T2_Observation = !is.na(Mortality_Status_Time_2)
+  ) |>
+  filter(!is.na(Days_In_Ground), Days_In_Ground >= 0) |>
+  filter(Inspection_Date < ymd("2025-07-01")) |>
+  dplyr::select(City, Unique_ID, Days_In_Ground, Status, Inspection, Inspection_Date, Has_T1_Observation, Has_T2_Observation) |>
+  rename_with(
+        ~ paste0("Survival_", .x)
+      , .cols = !any_of(c("City", "Unique_ID"))
+    )
+
+# 4. Creating the final dataset for its final preparation
+Final_Giveaway_Y2017_Y2024 <-
+  Pre_V3_Giveaway_Y2017_Y2024 |>
+  left_join(Giveaway_Survival_Data, by = c("City","Unique_ID")) |>
+  dplyr::select(
+  Unique_ID                                
+, City                                         
+, Address                                      
+, Time_Period                                  
+, Date_Planted                                 
+, Year_Planted                                 
+, Season_Planted                               
+, Year_Surveyed                                
+, Date_Surveyed                                
+, Family                                       
+, Genus                                        
+, Species                                      
+, Cultivar                                     
+, Common_Name                                  
+, i_Tree_Code                       
+, Native_Status                                
+, Deciduous_Evergreen                          
+, Broadleaf_Conifer                 
+, Growth_Form                       
+, Percent_Leaf_Type                 
+, Leaf_Type                         
+, Growth_Rate                       
+, Longevity                         
+, Height_Maturity                   
+, Public_Private                               
+# , Comment_General                              
+# , Easting                                      
+# , Northing                                     
+# , General_Location                             
+, Land_Use                                     
+, Site_Type                                    
+, Vigor                                        
+, Mortality_Status                             
+, Conditions                                   
+# , DBH                                          
+# , Height                                       
+# , Width                                        
+# , Basal_Sprouts                                
+# , Days_Since_Planted  #Not needed anymore                          
+# , Comment_Survey                               
+, Survey_Year_Dataset                          
+, Parcel_Year_Dataset                          
+, Census_Year_Dataset                          
+, Parcel_Location_ID                           
+# , Parcel_Unique_ID                             
+# , Parcel_Property_ID                           
+, Parcel_Lot_Date                              
+, Parcel_Lot_Size                              
+# , Parcel_Lot_Units                             
+, Parcel_Lot_Price_Adjusted_2023               
+, Parcel_Building_Value_Adjusted_2023          
+, Parcel_Land_Value_Adjusted_2023              
+, Parcel_Other_Value_Adjusted_2023             
+, Parcel_Total_Value_Adjusted_2023             
+, Parcel_Year                                  
+, Parcel_Style                                 
+, Parcel_Use_Code                              
+, Parcel_Zoning                                
+, Parcel_Year_Built                            
+, Parcel_Building_Area                         
+, Parcel_Residential_Area                      
+, Parcel_Units                                 
+, Parcel_Number_Rooms                          
+, Parcel_Stories                               
+, Census_GEOID                                 
+, Census_Block                                 
+, Census_Tract                                 
+, Census_County                                
+, Census_State                                 
+, Census_Median_Household_Income_Adjusted_2023 
+, Census_Total_Population                      
+, Census_Households       
+, Census_Ethnicity_Population
+, Census_White_Alone                           
+, Census_Black_Alone                           
+, Census_American_Indian_Alone                 
+, Census_Asian_Alone                           
+, Census_Native_Hawaiian_Alone                 
+, Census_Other_Alone                           
+, Census_Two_or_More_Alone                     
+, Census_Hispanic_Alone                        
+, Census_White_Alone_Percentage           
+, Census_Black_Alone_Percentage           
+, Census_American_Indian_Alone_Percentage 
+, Census_Asian_Alone_Percentage           
+, Census_Native_Hawaiian_Alone_Percentage 
+, Census_Other_Alone_Percentage          
+, Census_Two_or_More_Alone_Percentage     
+, Census_Hispanic_Alone_Percentage        
+, Census_Labor_Population                    
+, Census_Unemployed      
+, Census_Unemployed_Percentage
+, Census_Median_Age                            
+, Census_Total_Population_Over_25              
+, Census_Median_Gross_Rent_Adjusted_2023                     
+, Census_Median_Home_Value_Adjusted_2023  
+, Census_Tenure_Population
+, Census_Owner_Occupied                        
+, Census_Renter_Occupied   
+, Census_Owner_Occupied_Percentage                       
+, Census_Renter_Occupied_Percentage
+, Census_Percentage_At_Least_High_School       
+, Census_Percentage_At_Least_College           
+, Survival_Days_In_Ground                      
+, Survival_Status                              
+, Survival_Inspection                          
+, Survival_Inspection_Date  
+, Survival_Has_T1_Observation
+, Survival_Has_T2_Observation
+, geometry
+  ) |>
+  rename(Census_GeoID = Census_GEOID) |>
+  mutate(
+    Year_Planted = as.integer(Year_Planted)
+  , Year_Surveyed = as.integer(Year_Surveyed)
+  , Parcel_Year = as.integer(Parcel_Year)
+  , Survey_Year_Dataset = as.integer(Survey_Year_Dataset)
+  , Parcel_Year_Dataset  = as.integer(Parcel_Year_Dataset)
+  , Census_Year_Dataset  = as.integer(Census_Year_Dataset)
+  ) |>
+  mutate(Identifier = paste0(City, "_", Unique_ID)) |>
+  dplyr::select(98, 1:97)
+
+Final_Giveaway_Y2017_Y2024 |>
+  st_write("input_data/Final_Giveaway_Y2017_Y2024.gpkg")
+
+# Perhaps calculate the percentages for the Census as the final step but you are good :)
+```
+
+# 6. Double Checks: Ensuring the datasets merged correctly for Holyoke, MA and Chelsea, MA (2017 and 2023) 
+```{r Double Checks for Holyoke, MA and Chelsea, MA}
+# 1. Missingness
+Final_Giveaway_Y2017_Y2024 |> 
+ map(~sum(is.na(.))) |>
+ bind_rows() |>
+ t()
+
+# 2. Categorical Variables
+Final_Giveaway_Y2017_Y2024 |> 
+  st_drop_geometry() |>
+  tidylog::select(-Address) |> 
+  mutate_if(is.character, as.factor) |>
+  select_if(is.factor) |>
+  map(~tabyl(.)) |>
+  bind_rows(.id = 'var') # Some Survival missing but nothing alarming—perhaps the day of those in the days-in-ground but I think I made it  
+
+# 3. Years Planted
+Final_Giveaway_Y2017_Y2024 |> 
+  mapview(zcol = 'Year_Planted')
+
+# 4. Site Types
+Final_Giveaway_Y2017_Y2024 |> 
+  filter(Time_Period == "Time 2") |>
+  st_drop_geometry() |> 
+  tabyl(Site_Type)
+
+# 5. Site Types | Graph
+Final_Giveaway_Y2017_Y2024 |> 
+  st_drop_geometry() |> 
+  group_by(Site_Type, City) |> 
+  count() |> 
+  ggplot(aes(n, Site_Type)) +
+  geom_col() +
+  facet_wrap(~City) +
+  theme_bw(16) +
+  NULL
+```
+
+```{r}
+Pre_V1_Giveaway_Y2017_Y2024 |>
+  filter(Time_Period == "Time 2") |>
+  st_drop_geometry() |> 
+  tabyl(Site_Type)
+
+Pre_V1_Giveaway_Y2017_Y2024 |>
+  filter(Time_Period == "Time 1") |>
+  st_drop_geometry() |> 
+  tabyl(Site_Type)
+
+temp_Pre_V1_Giveaway_Y2017_Y2024 <-
+  bind_rows(Holyoke_Giveaway_Data_Y2017_Y2024, Chelsea_Giveaway_Data_Y2017_Y2024) |>
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326)
+```
+
+
+# 7. Archived: Census and Address Code for Geopackages 
+```{r Archived Data Wrangling eval=FALSE, include=FALSE}
+#------INSERT IN CHAPTER 2. CENSUS DATA | STEP 0 ------# 
+# --- Running Notes --- #
+# For the inflation data, U.S. Bureau Labor of Statistics was used, particularly from the years 2017 and 2023 to be able to get the value needed for comparisons: https://www.bls.gov/regions/northeast/data/consumerpriceindex_boston_table.htm
+# I wanted to continue having the same principle here
+# --------------------- #
+
+# 1. Loading the list of variables from ACS of 2017 & 2024
+## a. Listing the 2017 variable data
+Variables_ACS_Y2017 <-
+  tidycensus::load_variables('acs5', year = 2017) |>
+  filter(geography == "block group")
+
+## b. Listing the 2023 variable data
+Variables_ACS_Y2023 <-
+  tidycensus::load_variables('acs5', year = 2021) |>
+  filter(geography == "block group")
+
+# 2. Selecting the variables of ACS of 2017 & 2023
+## a. Choosing the 2017 & 2023 variables | EM: Double-checked and seems Y2017 & Y2023 are the same
+My_Vars <-
+  c('Median_Household_Income_Adjusted_2023' = 'B19013_001'
+  , 'Total_Population'                      = 'B01003_001'
+  , 'Households'                            = 'B11001_001'
+  , 'Ethnicity_Population'                  = 'B03002_001'
+  , 'White_Alone'                           = 'B03002_003'
+  , 'Black_Alone'                           = 'B03002_004'
+  , 'American_Indian_Alone'                 = 'B03002_005'
+  , 'Asian_Alone'                           = 'B03002_006'
+  , 'Native_Hawaiian_Alone'                 = 'B03002_007'
+  , 'Other_Alone'                           = 'B03002_008'
+  , 'Two_or_More_Alone'                     = 'B03002_009'
+  , 'Hispanic_Alone'                        = 'B03002_012'
+  , 'Labor_Population'                      = 'B23025_003' # EM: Might need double-checking
+  , 'Unemployed'                            = 'B23025_005'
+  , 'Median_Age'                            = 'B01002_001'
+  , 'Total_Population_Over_25'              = 'B15003_001'
+  , 'ed_High_School_Degree'                 = 'B15003_017'
+  , 'ed_GED_Degree'                         = 'B15003_018'
+  , 'ed_College_Less_1_Year'                = 'B15003_019'
+  , 'ed_College_More_1_Year'                = 'B15003_020'
+  , 'ed_Associate_Degree'                   = 'B15003_021'
+  , 'ed_plus_Bachelor_Degree'               = 'B15003_022'
+  , 'ed_plus_Master_Degree'                 = 'B15003_023'
+  , 'ed_plus_Professional_Degree'           = 'B15003_024'
+  , 'ed_plus_Doctorate_Degree'              = 'B15003_025'
+  , 'Median_Gross_Rent_Adjusted_2023'       = 'B25064_001'
+  , 'Median_Home_Value_Adjusted_2023'       = 'B25077_001' #EM to DL: Not sure if we need this any more 
+  , 'Tenure_Population'                     = 'B25003_001'
+  , 'Owner_Occupied'                        = 'B25003_002'
+  , 'Renter_Occupied'                       = 'B25003_003'
+      )
+
+# 3. Selecting the variables of ACS of 2017 & 2023
+## a. Downloading the Y2017 Census Data 
+Massachusetts_CBG_Data_Y2017 <-
+  tidycensus::get_acs(
+      geography = 'block group'
+    , state = 'Massachusetts'
+    , variables = My_Vars           
+    , year = 2017
+    , geometry = TRUE
+    , output = 'wide'
+    , moe_level = 95
+    ) |>
+    dplyr::select(-dplyr::ends_with('M')) |>
+    dplyr::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
+    rename(NAME = NAM) |>
+    tidyr::separate( 
+        NAME
+      , into = c('Block', 'Tract', 'County', 'State')
+      , sep  = ', '
+      ) |> 
+    dplyr::mutate(
+      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
+    , Percentage_At_Least_High_School =
+        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
+        Total_Population_Over_25
+    , Percentage_At_Least_College =
+        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
+        Total_Population_Over_25
+    ) |>
+    mutate(Median_Household_Income_Adjusted_2023 = Median_Household_Income_Adjusted_2023*(326.016/267.033)
+          , Median_Gross_Rent_Adjusted_2023 = Median_Gross_Rent_Adjusted_2023*(326.016/267.033)
+          , Median_Home_Value_Adjusted_2023 = Median_Home_Value_Adjusted_2023*(326.016/267.033)) |>
+    mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
+         , Black_Alone_Percentage = (Black_Alone/Ethnicity_Population)
+         , American_Indian_Alone_Percentage = (American_Indian_Alone/Ethnicity_Population)
+         , Asian_Alone_Percentage = (Asian_Alone/Ethnicity_Population)
+         , Native_Hawaiian_Alone_Percentage = (Native_Hawaiian_Alone/Ethnicity_Population)
+         , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
+         , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
+         , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
+         , Unemployed_Percentage = (Unemployed/Labor_Population)
+         , Owner_Occupied_Percentage = (Owner_Occupied/Tenure_Population)
+         , Renter_Occupied_Percentage = (Renter_Occupied/Tenure_Population)
+         ) |>
+    dplyr::select(-dplyr::starts_with('ed_')) |>
+    mutate(Year_Dataset = "2017") |>
+    rename_with(~ paste0("Census_", .x)
+              ,  .cols = -any_of("geometry")) |> #Making sure geometry doesn't change name
+    mutate(Time_Period = "Time 1") 
+
+### i) Writing this out 
+Massachusetts_CBG_Data_Y2017 |>
+  st_write("input_data/General/Massachusetts_CBG_Data_Y2017.gpkg")
+
+## b. Downloading the Y2023 Census Data
+Massachusetts_CBG_Data_Y2023 <-
+  tidycensus::get_acs(
+      geography = 'block group'
+    , state = 'Massachusetts'
+    , variables = My_Vars           
+    , year = 2023
+    , geometry = TRUE
+    , output = 'wide'
+    , moe_level = 95
+    ) |>
+    dplyr::select(-dplyr::ends_with('M')) |>
+    dplyr::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
+    rename(NAME = NAM) |> 
+    tidyr::separate( 
+        NAME
+      , into = c('Block', 'Tract', 'County', 'State')
+      , sep  = '; ' # The delimiter for 2023 was for some reason different?
+      ) |> 
+    dplyr::mutate(
+      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
+    , Percentage_At_Least_High_School =
+        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
+        Total_Population_Over_25
+    , Percentage_At_Least_College =
+        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
+        Total_Population_Over_25
+    ) |>
+    mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
+         , Black_Alone_Percentage = (Black_Alone/Ethnicity_Population)
+         , American_Indian_Alone_Percentage = (American_Indian_Alone/Ethnicity_Population)
+         , Asian_Alone_Percentage = (Asian_Alone/Ethnicity_Population)
+         , Native_Hawaiian_Alone_Percentage = (Native_Hawaiian_Alone/Ethnicity_Population)
+         , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
+         , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
+         , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
+         , Unemployed_Percentage = (Unemployed/Labor_Population)
+         , Owner_Occupied_Percentage = (Owner_Occupied/Tenure_Population)
+         , Renter_Occupied_Percentage = (Renter_Occupied/Tenure_Population)
+         ) |>
+    dplyr::select(-dplyr::starts_with('ed_')) |>
+    mutate(Year_Dataset = "2023") |>
+    rename_with(~ paste0("Census_", .x)
+              ,  .cols = -any_of("geometry")) |>
+    mutate(Time_Period = "Time 2") 
+
+### i) Writing this out 
+Massachusetts_CBG_Data_Y2023 |>
+  st_write("input_data/General/Massachusetts_CBG_Data_Y2023.gpkg")
+
+#------INSERT IN CHAPTER 3. ADDRESS DATA | STEP 0 ------# 
+### iv) Finding all the Addresses that Need Appending
+Holyoke_Giveaway_Addresses <-
+  Pre_Holyoke_Giveaway_Data_Y2017_Y2024 |>
+  reverse_geocode(
+    lat = Latitude
+  , long = Longitude
+  , method = "arcgis"
+  , full_results = TRUE
+  )
+
+Holyoke_Giveaway_Addresses |> 
+  st_write("input_data/Holyoke/Holyoke_Giveaway_Addresses.gpkg")
+
+```
+
+
+
