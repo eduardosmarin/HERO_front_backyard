@@ -195,8 +195,8 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
   broom::tidy()
 
 # 4. Takeaways
-# - The p-value is very high (p =.7522). The issue is that there is very small amount of additional deaths in T2. This may lead to why the relationship is not statistically significant. The above will likely be a continued issue going forward.
 #DHL sees a very LOW value
+# EM: Forgot to update the comments; I fixed the Chi to include T2 > max(2017 Survey Date Planted) | as Time 1 since it was only observed once, thats why it shifts
 ```
 
 ## b) Front yard and Backyard
@@ -324,6 +324,7 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
   arrange(Time, City, Yard)
 
 # DHL where is the chi-square analyses?
+# EM: Was confused if I did eight separate Chi Squares. Wanted your clarification first for that.
 ```
 
 
@@ -349,7 +350,8 @@ survival_curve_data <-
         ) |>
   tidylog::distinct() # Since they are duplicates and cna remove
 
-# DHL: that's a really big loss, is that intentional?
+# DHL: that's a really big loss, is that intentional? 
+# EM: yea...the reason is that the code summarizes the data but it counts each tree twice | since it was time long and needs to be time wide, instead of pivoting and then doing that, I decided to go with distinct (it works the same from my understanding)
 
 # 2. Overall Giveaway Kaplan-Meier Model
 ## a) Creating the model
@@ -416,6 +418,9 @@ survdiff(Surv(Time, Event) ~ City, data = survival_curve_data) # Read the packag
 
 ## b) Yard
 survdiff(Surv(Time, Event) ~ Yard, data = survival_curve_data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+
+## c) Yard + City
+survdiff(Surv(Time, Event) ~ Yard + City, data = survival_curve_data) # Again, very low..
 
 # Takeaways: City has an overall low p-value; but due to the low number of citings, it might not be worth using or mentioning with caution. However, I think that completes the front yard-backyard analysis
 
@@ -497,6 +502,9 @@ survdiff(Surv(Time, Event) ~ City, data = General_Location_Survival_Curve_Data) 
 ## b) Location
 survdiff(Surv(Time, Event) ~ Location, data = General_Location_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
 
+## c) City + Location
+survdiff(Surv(Time, Event) ~ Location + City, data = General_Location_Survival_Curve_Data) # Again, very low, but is that because of City skewing it?
+
 # City and particularly general location, as suspected based on the literature, impact the survivorship of tree plantings
 ```
 
@@ -574,8 +582,12 @@ ggsurvfit::ggsurvfit(Research_Giveaway_Kaplan_Model) +
 ## a) City
 survdiff(Surv(Time, Event) ~ City, data = Research_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
 
-## b) Yard
+## b) Residential Location
 survdiff(Surv(Time, Event) ~ Residential, data = Research_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+
+## c) City + Residential Location
+survdiff(Surv(Time, Event) ~ City + Residential, data = Research_Survival_Curve_Data) #EM: Woah, very low
+
 
 # Takeaways: Doesn't seem to have too large of a difference besides right-of-way trees which continues to highlight the greater literature; insignificance though for FY BY. interestingly, right-of-way wasn't that high too
 ```
