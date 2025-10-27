@@ -313,8 +313,9 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
   tidyr::pivot_wider(
     names_from = Status
   , values_from = n
+  , values_fill = 0 # instead of the ifelse in a mutate
   ) |>
-  mutate(Dead = ifelse(is.na(Dead), 0, Dead)) |>
+  # mutate(Dead = ifelse(is.na(Dead), 0, Dead)) |>
   mutate(
      Total = Alive + Dead
    , `Alive (%)` = round(100 * (Alive / Total), 1)
@@ -423,6 +424,46 @@ survdiff(Surv(Time, Event) ~ Yard, data = survival_curve_data) # Read the packag
 survdiff(Surv(Time, Event) ~ Yard + City, data = survival_curve_data) # Again, very low..
 
 # Takeaways: City has an overall low p-value; but due to the low number of citings, it might not be worth using or mentioning with caution. However, I think that completes the front yard-backyard analysis
+
+
+## b) Visualizing the model
+survival_curve_data |> 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Yard + City, data = _) |> 
+  ggsurvfit::ggsurvfit() +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() + # automatically turned off with facet
+  ggsurvfit::add_censor_mark() +
+  # facet_wrap(~strata, nrow = 2) + # for faceting
+  # https://www.danieldsjoberg.com/ggsurvfit/articles/gallery.html
+  # DHL I"m not sure coord_cartisian is helppful. The defaults are great
+  coord_cartesian(#xlim = c(0, 3000) # Clipping to not show a huge drop; choose 3000 since it was the "highest" number that did not lead to a huge drop across all models
+                 ylim = c(0.5, 1)
+                ) +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Yard-based Survivorship Curve for Frontyard and Backyard Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" 
+  ) 
+
+
+survival_curve_data |> 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Yard + City, data = _) |> 
+  ggsurvfit::ggsurvfit() +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() + # automatically turned off with facet
+  ggsurvfit::add_censor_mark() +
+  facet_wrap(~strata, nrow = 2) + # for faceting
+  # DHL I"m not sure coord_cartisian is helppful. The defaults are great
+  # coord_cartesian(#xlim = c(0, 3000) # Clipping to not show a huge drop; choose 3000 since it was the "highest" number that did not lead to a huge drop across all models
+  #                ylim = c(0.5, 1)
+  #               ) +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Yard-based Survivorship Curve for Frontyard and Backyard Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" 
+  ) 
 
 ```
 
@@ -600,4 +641,65 @@ End takeaways:
 - For following steps for thesis, I might want to step a bit more broadly. Instead of limiting the dataset to just the observations in FY BY, I can see if generally survivorship (which these curves are cool but need more fleshing out) are generally impacted by factors like property parcel value, education, etc. Maybe that could be the next thing I complete this week so I can start writing. 
   - Currently, I belive I am unable to ask questions concerning income and landscape mullet just due to the size of the dataset.
 
+# RESOURCES
+
+```{r eval=FALSE, include=FALSE}
+an introduction, including coxph
+working with survival data inr
+https://bookdown.org/nhanhocumc/biodata-r/survival.html#working-with-survival-data-in-r
+
+discussion of censoring
+https://stackoverflow.com/questions/41968606/left-censoring-for-survival-data-in-r
+
+Survival analysis in R
+basics plus nice graphing
+https://www.emilyzabor.com/survival-analysis-in-r.html#comparing-survival-times-between-groups
+
+includes some advanced topics and visualizations
+https://www.epirhandbook.com/en/new_pages/survival_analysis.html#cox-regression-analysis
+
+all about graphiing with ggsurvfit
+https://www.danieldsjoberg.com/ggsurvfit/reference/ggsurvfit.html
+lots of logistic regressions
+```
+
+
+# Cox proportional hazard models
+```{r}
+
+
+# cox with City and Residential as addative
+coxph_add <-
+  survival::coxph(
+    Surv(Time, Event) ~ City + Residential # K-M is limited in the number of  variables
+    # Cox Proportional Hazard models are not
+    , data = Research_Survival_Curve_Data
+  )
+
+coxph_add
+coxph_add |> broom::tidy()
+coxph_add |> ggeffects::ggpredict()
+coxph_add |> ggeffects::ggpredict() |> plot()
+coxph_add |>
+  ggeffects::ggpredict(terms = c('City', 'Residential')) |> 
+  plot(facets = TRUE) + 
+  geom_hline(yintercept = 1)
+
+# cox interaction
+coxph_int <-
+  survival::coxph(
+    Surv(Time, Event) ~ City*Residential # INTERACTION
+    , data = Research_Survival_Curve_Data
+  )
+
+coxph_int
+coxph_int |> broom::tidy()
+coxph_int |> ggeffects::ggpredict()
+coxph_int |> ggeffects::ggpredict() |> plot()
+
+performance::compare_performance(
+    coxph_add
+  , coxph_int
+  , rank = TRUE)
+```
 
