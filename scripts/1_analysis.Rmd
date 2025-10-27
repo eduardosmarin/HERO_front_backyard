@@ -66,24 +66,27 @@ vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE,
 ```{r}
 # 1. Reading in the final giveaway data set
 Final_Giveaway_Y2017_Y2024 <-
-  st_read("input_data/Final_Giveaway_Y2017_Y2024.gpkg") |>
+  st_read("input_data/Final_Giveaway_Y2017_Y2024_2025-10-27.gpkg") |>
   st_drop_geometry()
-  
-# 2. Developing the code generally used for the survivorship study 
-General_FY_BY_Giveaway_Y2017_Y2024 <-
+
+# 2. Developing the code used for the General Survivorship Curves, which can be subsetted later based on other factors
+General_Giveaway_Y2017_Y2024 <-
   Final_Giveaway_Y2017_Y2024 |>
-  filter(Site_Type %in% c("Front Yard", "Backyard")) |>
   # dplyr::select(-starts_with("Census"), -starts_with("Parcel")) |> #Why I gave them the prefixes earlier :)
   group_by(Identifier) |>
   filter(
     any(
       # Case 1: Tree observed at both Time 1 and Time 2
       Survival_Has_T1_Observation & Survival_Has_T2_Observation | #or
-      # Case 2: Seen in T1 and dead at T1
+      # Case 2: Seen in T1 and dead at T2
       (Survival_Has_T1_Observation & Survival_Status == 1 & Survival_Inspection == 1) | #or
       # Case 3: Seen in T2 (alive, so alive before)
-      (Survival_Status == 0 & Survival_Inspection == 2)
-    , na.rm = TRUE)
+      (Survival_Status == 0 & Survival_Inspection == 2 & Date_Planted < as_date("2017-05-30")) | #needed this in case a tree wasnt actually in T1; also, decided to not base it off of January 1st since that case was so rare
+      # Case 4: Dead in T2 & > Inspection Date in T1 
+      (Survival_Status == 1 & Survival_Inspection == 2 &
+         !is.na(Survival_Inspection_Date)  &
+         Date_Planted > as_date("2017-06-27")) #That is the last inspection date of 2017 | Basically, this is more for the Kaplan since it screws up the Chi Square but wanted to know, in essence, the survival rate for those planted after (EM: These should be T1 in Chi Square, but ask Dexter)
+      , na.rm = TRUE)
   ) |>
   ungroup()
 
@@ -91,9 +94,10 @@ General_FY_BY_Giveaway_Y2017_Y2024 <-
 ## a) Ensuring accurate accounting in T1 and T2
 ### i] Correcting T1 | Making sure to account for NAs in T1 (never surveyed) that were found to be alive in T2
 FY_BY_Giveaway_Alive_T1 <- 
-  General_FY_BY_Giveaway_Y2017_Y2024 |>
+  General_Giveaway_Y2017_Y2024 |>
   filter(
-     Year_Surveyed == 2017   # Only for those in 2017     
+     Site_Type %in% (c("Backyard","Front Yard"))
+   , Year_Surveyed == 2017   # Only for those in 2017     
    , is.na(Mortality_Status) # Those without a mortality status         
    , Survival_Status == 0    # Those that had a survey 2 that did not elicit an event        
   )
@@ -105,7 +109,8 @@ Vector_Giveawy_Alive_T1
 
 ### ii] Correcting T2 | Making sure to remove those that were marked as dead in T1 and again marked dead in T2 (since that'd be double counting!)
 FY_BY_Giveaway_Dead_T2 <- 
-  General_FY_BY_Giveaway_Y2017_Y2024 |>
+  General_Giveaway_Y2017_Y2024 |>
+  filter(Site_Type %in% (c("Backyard","Front Yard"))) |>
   group_by(Identifier) |>
   summarise(
     Dead_T1 = any(Mortality_Status %in% c("Standing Dead","Removed","Stump") & Time_Period == "Time 1") # Finding those dead in T1
@@ -118,9 +123,23 @@ Vector_Giveaway_Dead_T2 <-
 
 Vector_Giveaway_Dead_T2
 
-## b) Preparing the data for the Chi Square
+## b) Making sure to create accurate Time 1 (Converting some Time 2 to Timw 1) for the Case 4 added earlier
+FY_BY_Giveaway_Case_4 <-
+  General_Giveaway_Y2017_Y2024 |>
+  filter(Time_Period != "Time 1"
+      ,  Site_Type %in% (c("Backyard","Front Yard"))) |>
+  mutate(Time_Period = ifelse((Survival_Status == 1 & Survival_Inspection == 2 & Date_Planted > as_date("2017-06-27")), "Time 1", Time_Period)) |>
+  filter(Time_Period != "Time 2")
+
+Vector_FY_BY_Giveaway_Case_4 <-
+   unique(FY_BY_Giveaway_Case_4$Identifier)
+  
+## c) Preparing the data for the Chi Square
 Chi_Fisher_Giveaway_Y2017_Y2024 <-
-  General_FY_BY_Giveaway_Y2017_Y2024 |>
+  General_Giveaway_Y2017_Y2024 |>
+  filter(Site_Type %in% (c("Backyard","Front Yard"))) |>
+  filter(!Identifier %in% Vector_FY_BY_Giveaway_Case_4) |>
+  rbind(FY_BY_Giveaway_Case_4) |>
   mutate(City = ifelse(City == "CHELSEA", "Chelsea", "Holyoke")) |> #I have checked preemptively and these are the only two ones available
   mutate(
      Yard = fct_recode(Site_Type #using fct_recode since making factors and setting names
@@ -252,7 +271,8 @@ T2_City_Fisher <-
   fisher.test(table(T2_City_Fisher_Data$City, T2_City_Fisher_Data$Status))
 
 T1_City_Fisher
-T2_City_Fisher
+
+T2_City_Fisher 
 
 # 4. Takeaways
 # - The p-value is relatively questionable here: T1 (p = .06), T2 (p = 1.0). First, the dataset seems very unstable based off of the values calculated. It may be that there is significantly more death in Holyoke compared to Chelsea but this becomes negligible. 
@@ -261,7 +281,6 @@ T2_City_Fisher
 ## d) Yard and City Interaction Effects
 ```{r}
 # 0. Since values are so low, decided not to run a Chi Square/Fisher Test here. Instead, I will just having reporting tables
-
 # 1. Create the table for counts | City, time, yard, and survivorship
 Chi_Fisher_Giveaway_Y2017_Y2024 |>
   count(Time, City, Yard, Status) |>
@@ -291,14 +310,15 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
 ```
 
 
-
-
 # 3. Survivorship Curves
 Decided to create survivorship curves because of all of the previous effort done earlier. However, I understand there is no quantifiable significance here.
+
+## a) Landscape Mullets
 ```{r}
 # 1. Building the survival-ready long dataframe
 survival_curve_data <-
-  General_FY_BY_Giveaway_Y2017_Y2024 |>
+  General_Giveaway_Y2017_Y2024 |>
+  filter(Site_Type %in% c("Front Yard", "Backyard")) |>
   transmute( #Just learned about this, cool since its like a combination of select & mutate
     Identifier   = Identifier
   , City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
@@ -318,7 +338,7 @@ Overall_Giveaway_Kaplan_Model <-
   ggsurvfit::survfit2(Surv(Time, Event) ~ 1, data = survival_curve_data) # tried piping but didn't work
 
 ## b) Visualizing the model
-ggsurvfit::ggsurvfit(Giveaway_Kaplan_Model) +
+ggsurvfit::ggsurvfit(Overall_Giveaway_Kaplan_Model) +
   ggsurvfit::add_confidence_interval() +
   ggsurvfit::add_risktable() +
   ggsurvfit::add_censor_mark() +
@@ -379,6 +399,168 @@ survdiff(Surv(Time, Event) ~ Yard, data = survival_curve_data) # Read the packag
 # Takeaways: City has an overall low p-value; but due to the low number of citings, it might not be worth using or mentioning with caution. However, I think that completes the front yard-backyard analysis
 
 ```
+
+## b) General Location (as in the HERO Presentation)
+```{r}
+# 1. Building the survival-ready long dataframe
+General_Location_Survival_Curve_Data <-
+  General_Giveaway_Y2017_Y2024 |>
+  transmute( #Just learned about this, cool since its like a combination of select & mutate
+    Identifier   = Identifier
+  , City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
+  , Location = General_Site_Type
+  , Time = as.numeric(Survival_Days_In_Ground)
+  , Event = Survival_Status # Calculated in the First step | Equivalent to Dexter's bin where 0 is alive and 1 is something happened
+  ) |>
+  filter(!is.na(Time) # Keeps rows where time is not missing
+        , !is.na(Event) # Makes sure that it has some sort of event status
+        , !is.na(Location) # Ensures only those that are Backyard or Front yard
+        ) |>
+  distinct() # Since they are duplicates and cna remove
+
+# 2. Overall Giveaway Kaplan-Meier Model
+## a) Creating the model
+General_Location_Overall_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ 1, data = General_Location_Survival_Curve_Data) # tried piping but didn't work
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(General_Location_Overall_Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Overall Survivorship Curve for General Location of Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" #Thanks for the \n inline suggestion
+  ) # Is the end supposed to all drop to 0? - clipped it later but need suggestion/tip
+  
+# 3. City Giveaway Kaplan-Meier Model
+## a) Creating the model
+General_Location_City_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ City, data = General_Location_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(General_Location_City_Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "City-based Survivorship Curve for General Location of Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  ) # Why is only Holyoke dropping to 0?
+  
+# 4. Location Giveaway Kaplan-Meier Model
+## a) Creating the model
+General_Location_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Location, data = General_Location_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(General_Location_Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Location-based Survivorship Curve for Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" 
+  ) 
+
+# 5. Analysis of strength of these models (will be small), particularly those that had a grouping
+## a) City
+survdiff(Surv(Time, Event) ~ City, data = General_Location_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+
+## b) Location
+survdiff(Surv(Time, Event) ~ Location, data = General_Location_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+
+# City and particularly general location, as suspected based on the literature, impact the survivorship of tree plantings
+```
+
+## c) Research Site Types (Right of Way vs. Specific Site Types)
+```{r}
+# 1. Building the survival-ready long dataframe
+Research_Survival_Curve_Data <-
+  General_Giveaway_Y2017_Y2024 |>
+  filter(Research_Site_Type %in% c("Front Yard", "Backyard", "Side Yard", "Residential Right-of-Way")) |>
+  transmute( #Just learned about this, cool since its like a combination of select & mutate
+    Identifier   = Identifier
+  , City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
+  , Residential = fct_recode(Research_Site_Type, "Front" = "Front Yard", "Back" = "Backyard", "Side" = "Side Yard", "Right-of-way" = "Residential Right-of-Way")
+  , Time = as.numeric(Survival_Days_In_Ground)
+  , Event = Survival_Status # Calculated in the First step | Equivalent to Dexter's bin where 0 is alive and 1 is something happened
+  ) |>
+  filter(!is.na(Time) # Keeps rows where time is not missing
+        , !is.na(Event) # Makes sure that it has some sort of event status
+        , !is.na(Residential) # Ensures only those that were listed earlier
+        ) |>
+  distinct() # Since they are duplicates and cna remove
+
+# 2. Overall Giveaway Kaplan-Meier Model
+## a) Creating the model
+Research_Overall_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ 1, data = Research_Survival_Curve_Data) # tried piping but didn't work
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Research_Overall_Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Overall Survivorship Curve for Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" #Thanks for the \n inline suggestion
+  ) # Is the end supposed to all drop to 0? - clipped it later but need suggestion/tip
+  
+# 3. City Giveaway Kaplan-Meier Model
+## a) Creating the model
+Research_City_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ City, data = Research_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Research_City_Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "City-based Survivorship Curve for Residenital Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" 
+  ) # Why is only Holyoke dropping to 0?
+  
+# 4. Residential Site Location Giveaway Kaplan-Meier Model
+## a) Creating the model
+Research_Giveaway_Kaplan_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Residential, data = Research_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Research_Giveaway_Kaplan_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Location-based Survivorship Curve for Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning residential giveaways implemented through the Greening the Gateway Cities Program" 
+  ) 
+
+# 5. Analysis of strength of these models (will be small), particularly those that had a grouping
+## a) City
+survdiff(Surv(Time, Event) ~ City, data = Research_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+
+## b) Yard
+survdiff(Surv(Time, Event) ~ Residential, data = Research_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+
+# Takeaways: Doesn't seem to have too large of a difference besides right-of-way trees which continues to highlight the greater literature; insignificance though for FY BY. interestingly, right-of-way wasn't that high too
+```
+
+End takeways (V2):
+- Location does seem to matter for tree survivorship, more generally if it is in a residential vs non-residential space. However, specific locations within a residential area may not lead to—at least from this dataset—any significance. As you can see, even including right-of-way, the p-value (<0.07) and tht there isn't ny experienced difference in survivorship between Front, Side, Back, and Right-of-way
 
 End takeaways:
 - This is a bit of a yikes since the data set was overall to small, specifically for the "landscape mullets" concept to see if there was any discernible trend. I did enjoy the data analysis part but had challenges overall with grappling with what this mean (which feels like not much)

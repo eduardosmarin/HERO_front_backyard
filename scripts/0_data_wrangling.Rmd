@@ -692,7 +692,9 @@ Broadleaf_Conifer_Table <-
  bind_rows(
     Pre_Broadleaf_Conifer_Table_V1
   , Pre_Broadleaf_Conifer_Table_V2
-    ) 
+    ) |>
+ rename_with(~ paste0("Ecological_", .x)
+            , .cols = -any_of("Species"))
 
 # 2. Creating the iTree Final Table
 ## a. Reading and renaming columns of the 
@@ -712,7 +714,7 @@ Pre_i_Tree_Table_V1 <-
        , Percent_Leaf_Type  = `Percent Leaf Type`
        , Leaf_Type          = `Leaf Type`
        , Growth_Rate        = `Growth Rate`
-       )
+       ) 
 
 ## b. Performing some double checks
 ### i) Checking for duplicates
@@ -744,7 +746,11 @@ i_Tree_Table <-
     Pre_i_Tree_Table_V1
   , Pre_i_Tree_Table_V2
     ) |>
-  dplyr::select(-`Genus Name`, -`Species Name`, -Synonym, -Family, -Order, -Class, -`Common Name`)
+  dplyr::select(-`Genus Name`, -`Species Name`, -Synonym, -Family, -Order, -Class, -`Common Name`) |>
+  rename_with(~ paste0("Ecological_", .x)
+          , .cols = -any_of(c("Genus_Name","Species","i_Tree_Code")) # Trying to make these not be note selected
+    )
+  
 ```
 
 # 5. Tree Giveaway Data: Merging all datasets and final cleanings for Holyoke, MA and Chelsea, MA (2017 and 2023)
@@ -887,7 +893,7 @@ Pre_V3_Giveaway_Y2017_Y2024 <-
   mutate(Address = str_to_upper(Address)
        , Public_Private = str_to_title(Public_Private)) |> #Making all the addresses capitals
   arrange(City, Address) |>
-  mutate(Date_Planted = if_else(is.na(Date_Planted), as.Date("2021-05-19"), Date_Planted)) |> 
+  # mutate(Date_Planted = if_else(is.na(Date_Planted), as.Date("2021-05-19"), Date_Planted)) |>
   mutate(
     Year_Planted = year(Date_Planted),
     Month = month(Date_Planted),
@@ -898,14 +904,21 @@ Pre_V3_Giveaway_Y2017_Y2024 <-
     )
   ) |>
   dplyr::select(-Month, -Broadleaf_Conifer) |>
-  mutate(Vigor = as.character(Vigor)
+  mutate(
+       , Basal_Sprouts = case_when(
+            Basal_Sprouts %in% c("No","N") ~ "No"
+          , Basal_Sprouts %in% c("Yes", "Yes", "1","2","3","5") ~ "Yes"
+          , TRUE ~ Basal_Sprouts )# Assuming number means presence
+       , DBH = ifelse(137.00, NA, DBH) # Checked for outliers and days_in_ground; the ones that were high >8 seemed reasonable given the data set
+       , Height = Height # Unsure how to check these; seems fine overall again
+       , Width = Width # DL: This one seems more odd; can there be 30-40 feet crown width for trees given the maximum ten years (that seems way to high)? 
+       , Vigor = as.character(Vigor)
        , Vigor = case_when(
             Vigor == "1" ~ "100% to 90% Full"
           , Vigor == "2" ~ "90% to 75% Full"
           , Vigor == "3" ~ "75% to 50% Full"
-          , Vigor == "4" ~ "50% or less"
-          , Vigor == "5" ~ "Unsure" #EM: Please check your email to double check this
-          , TRUE ~ Vigor)
+          , Vigor %in% c("4","5") ~ "50% or less" #EM: 5—Seems to be only in Y2017 (~70) and seems to be a further subset of bad conditions so will group there. Should double check though
+          , TRUE ~ NA_character_) #approx. 6 other counts of other numbers from 2017 & 0 serves the same purpose s NA_character_ so making everything else NA
        , Site_Type = case_when(
             Site_Type == "SC" ~ "Sidewalk Cutout"
           , Site_Type == "BY" ~ "Backyard"
@@ -944,6 +957,18 @@ Pre_V3_Giveaway_Y2017_Y2024 <-
           , Site_Type %in% c("Other Maintained", "Maintained Park") ~ "Maintained Area"
           , TRUE ~ NA_character_)
               ) |>
+         mutate(
+          General_Site_Type = case_when(
+            Site_Type %in% c("Sidewalk Cutout", "Sidewalk Planting Strip") ~ "Street Trees"
+          , Site_Type %in% c("Back Yard", "Side Yard", "Front Yard") ~ "Yard Trees"
+          , Site_Type %in% c("Other Maintained", "Maintained Park") ~ "Maintained Area"
+          , TRUE ~ NA_character_)
+       , Research_Site_Type = case_when(
+            Site_Type %in% c("Sidewalk Cutout", "Sidewalk Planting Strip") & 
+            Land_Use %in% c("Single-Family Detached", "Single-Family General", "Single-Family Attached") ~ "Residential Right-of-Way" #Excluded multifamily since that may differ too greatly
+          , TRUE ~ Site_Type
+          )
+        ) |>
     left_join(Broadleaf_Conifer_Table, by = "Species") |>
     left_join(i_Tree_Table, by = "Species")
 # All now is the final step of the ground and then done :)
@@ -951,6 +976,7 @@ Pre_V3_Giveaway_Y2017_Y2024 <-
 # 3. Calculating Days in Ground for All Data
 Giveaway_Survival_Data <- 
   Pre_V3_Giveaway_Y2017_Y2024 |>
+    # filter(Site_Type == c("Backyard", "Front Yard")) |>
   st_drop_geometry() |>
   dplyr::select(City, Unique_ID, Date_Planted, Time_Period, Date_Surveyed, Mortality_Status) |>
   pivot_wider(
@@ -1026,27 +1052,22 @@ Final_Giveaway_Y2017_Y2024 <-
 , i_Tree_Code                       
 , Native_Status                                
 , Deciduous_Evergreen                          
-, Broadleaf_Conifer                 
-, Growth_Form                       
-, Percent_Leaf_Type                 
-, Leaf_Type                         
-, Growth_Rate                       
-, Longevity                         
-, Height_Maturity                   
 , Public_Private                               
 # , Comment_General                              
 # , Easting                                      
 # , Northing                                     
 # , General_Location                             
 , Land_Use                                     
-, Site_Type                                    
+, Site_Type     
+, General_Site_Type
+, Research_Site_Type
 , Vigor                                        
 , Mortality_Status                             
 , Conditions                                   
-# , DBH                                          
-# , Height                                       
+, DBH
+, Height
 # , Width                                        
-# , Basal_Sprouts                                
+, Basal_Sprouts
 # , Days_Since_Planted  #Not needed anymore                          
 # , Comment_Survey                               
 , Survey_Year_Dataset                          
@@ -1055,6 +1076,13 @@ Final_Giveaway_Y2017_Y2024 <-
 , Parcel_Location_ID                           
 # , Parcel_Unique_ID                             
 # , Parcel_Property_ID                           
+, Ecological_Broadleaf_Conifer                 
+, Ecological_Growth_Form                       
+, Ecological_Percent_Leaf_Type                 
+, Ecological_Leaf_Type                         
+, Ecological_Growth_Rate                       
+, Ecological_Longevity                         
+, Ecological_Height_Maturity                   
 , Parcel_Lot_Date                              
 , Parcel_Lot_Size                              
 # , Parcel_Lot_Units                             
@@ -1130,15 +1158,24 @@ Final_Giveaway_Y2017_Y2024 <-
   , Census_Year_Dataset  = as.integer(Census_Year_Dataset)
   ) |>
   mutate(Identifier = paste0(City, "_", Unique_ID)) |>
-  dplyr::select(98, 1:97)
+  rename(Ecological_Native_Status = Native_Status
+        , Ecological_Deciduous_Evergreen = Deciduous_Evergreen) |>
+  dplyr::select(103, 1:102)
 
 Final_Giveaway_Y2017_Y2024 |>
-  st_write("input_data/Final_Giveaway_Y2017_Y2024.gpkg")
-
-# Perhaps calculate the percentages for the Census as the final step but you are good :)
+  st_write(paste0("input_data/Final_Giveaway_Y2017_Y2024_", Sys.Date(), ".gpkg")) # Changed it to have the sys.date
 ```
 
 # 6. Double Checks: Ensuring the datasets merged correctly for Holyoke, MA and Chelsea, MA (2017 and 2023) 
+
+## a) Double checking missignness with mortality
+```{r}
+Final_Giveaway_Y2017_Y2024 |>
+  st_drop_geometry() |>
+  tabyl(City, Time_Period, Mortality_Status) # This is the issue <- there are SO many NAs in 2017; checked the original data, and it has the same finding. Thus, survivorship becomes challenging to determine and gives the false sense of high survivorship rate. That is the issue currently with the data. But still, pretty interesting
+```
+
+## b) Checking Other
 ```{r Double Checks for Holyoke, MA and Chelsea, MA}
 # 1. Missingness
 Final_Giveaway_Y2017_Y2024 |> 
