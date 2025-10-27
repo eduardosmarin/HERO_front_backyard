@@ -186,9 +186,17 @@ Survivorship_Chi_Square <-
   chisq.test(table(Chi_Fisher_Giveaway_Y2017_Y2024$Time, Chi_Fisher_Giveaway_Y2017_Y2024$Status))
 
 Survivorship_Chi_Square
+Survivorship_Chi_Square |> broom::tidy()
+
+# or
+Chi_Fisher_Giveaway_Y2017_Y2024 |> 
+  janitor::tabyl(Time, Status) |> 
+  janitor::chisq.test() |> 
+  broom::tidy()
 
 # 4. Takeaways
 # - The p-value is very high (p =.7522). The issue is that there is very small amount of additional deaths in T2. This may lead to why the relationship is not statistically significant. The above will likely be a continued issue going forward.
+#DHL sees a very LOW value
 ```
 
 ## b) Front yard and Backyard
@@ -229,6 +237,9 @@ T2_Yard_Fisher <-
 
 T1_Yard_Fisher
 T2_Yard_Fisher
+
+T1_Yard_Fisher |> broom::tidy()
+T2_Yard_Fisher |> broom::tidy()
 
 # 4. Takeaways
 # - The p-value remains relatively high: T1 (p = .6523), T2 (p = ,4526). There is high survivorship regardless of placement of the tree; again, attributed to the small sample size and number of deaths (overall, a lot of trees are doing well)
@@ -271,8 +282,13 @@ T2_City_Fisher <-
   fisher.test(table(T2_City_Fisher_Data$City, T2_City_Fisher_Data$Status))
 
 T1_City_Fisher
-
 T2_City_Fisher 
+
+list(
+    T1_City_Fisher # LOW pvalue
+  , T2_City_Fisher
+  ) |> 
+  map(broom::tidy)
 
 # 4. Takeaways
 # - The p-value is relatively questionable here: T1 (p = .06), T2 (p = 1.0). First, the dataset seems very unstable based off of the values calculated. It may be that there is significantly more death in Holyoke compared to Chelsea but this becomes negligible. 
@@ -307,6 +323,7 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
   dplyr::select(Time, City, Yard, Total, `Alive (%)`, `Dead (%)`) |>
   arrange(Time, City, Yard)
 
+# DHL where is the chi-square analyses?
 ```
 
 
@@ -330,7 +347,9 @@ survival_curve_data <-
         , !is.na(Event) # Makes sure that it has some sort of event status
         , !is.na(Yard) # Ensures only those that are Backyard or Front yard
         ) |>
-  distinct() # Since they are duplicates and cna remove
+  tidylog::distinct() # Since they are duplicates and cna remove
+
+# DHL: that's a really big loss, is that intentional?
 
 # 2. Overall Giveaway Kaplan-Meier Model
 ## a) Creating the model
@@ -362,7 +381,8 @@ ggsurvfit::ggsurvfit(City_Giveaway_Kaplan_Model) +
   ggsurvfit::add_risktable() +
   ggsurvfit::add_censor_mark() +
   coord_cartesian(xlim = c(0, 3000) # Clipping to not show a huge drop; choose 3000 since it was the "highest" number that did not lead to a huge drop across all models
-                , ylim = c(0.9, 1)) +
+                # , ylim = c(0.9, 1)
+                ) +
   labs(
      x = "Time (Expressed in Days)"
    , y = "Survival probability"
@@ -381,7 +401,8 @@ ggsurvfit::ggsurvfit(Yard_Giveaway_Kaplan_Model) +
   ggsurvfit::add_risktable() +
   ggsurvfit::add_censor_mark() +
   coord_cartesian(xlim = c(0, 3000) # Clipping to not show a huge drop; choose 3000 since it was the "highest" number that did not lead to a huge drop across all models
-                , ylim = c(0.9, 1)) +
+                # , ylim = c(0.9, 1)
+                ) +
   labs(
      x = "Time (Expressed in Days)"
    , y = "Survival probability"
