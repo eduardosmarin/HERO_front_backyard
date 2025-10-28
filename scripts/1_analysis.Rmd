@@ -33,7 +33,7 @@ packs <-c(
             'janitor'    # cleans things up, also pipe-friendly cross-tabulations
            , 'sf'         # for spatial data support
           , 'tidyverse'  # cuz
-          # , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'tidylog'    # prints out what was done in dplyr and tidyr
           , 'magrittr'   # for the pipe
           , 'mapview'    # web maps for zooming and panning around
           #, 'beepr'      # makes noise when things are done!
@@ -72,19 +72,19 @@ Final_Giveaway_Y2017_Y2024 <-
 # 2. Developing the code used for the General Survivorship Curves, which can be subsetted later based on other factors
 General_Giveaway_Y2017_Y2024 <-
   Final_Giveaway_Y2017_Y2024 |>
-  # dplyr::select(-starts_with("Census"), -starts_with("Parcel")) |> #Why I gave them the prefixes earlier :)
+  # tidylog::select(-starts_with("Census"), -starts_with("Parcel")) |> #Why I gave them the prefixes earlier :)
   group_by(Identifier) |>
   filter(
     any(
       # Case 1: Tree observed at both Time 1 and Time 2
       Survival_Has_T1_Observation & Survival_Has_T2_Observation | #or
-      # Case 2: Seen in T1 and dead at T2
+      # Case 2: Seen as dead in T1 and dead at T2
       (Survival_Has_T1_Observation & Survival_Status == 1 & Survival_Inspection == 1) | #or
       # Case 3: Seen in T2 (alive, so alive before)
       (Survival_Status == 0 & Survival_Inspection == 2 & Date_Planted < as_date("2017-05-30")) | #needed this in case a tree wasnt actually in T1; also, decided to not base it off of January 1st since that case was so rare
-      # Case 4: Dead in T2 & > Inspection Date in T1 
+      # Case 4: Dead in T2 & Date of the Planting > Inspection Date in T1 (Planted in between T1 and T2)
       (Survival_Status == 1 & Survival_Inspection == 2 &
-         !is.na(Survival_Inspection_Date)  &
+         !is.na(Survival_Inspection_Date)  & #Ask what is NAs; do I assume it is not observed
          Date_Planted > as_date("2017-06-27")) #That is the last inspection date of 2017 | Basically, this is more for the Kaplan since it screws up the Chi Square but wanted to know, in essence, the survival rate for those planted after (EM: These should be T1 in Chi Square, but ask Dexter)
       , na.rm = TRUE)
   ) |>
@@ -101,6 +101,8 @@ FY_BY_Giveaway_Alive_T1 <-
    , is.na(Mortality_Status) # Those without a mortality status         
    , Survival_Status == 0    # Those that had a survey 2 that did not elicit an event        
   )
+
+# John: Email about NAs in 2017 & the NAs in 2024 datset
 
 Vector_Giveawy_Alive_T1 <-
   unique(FY_BY_Giveaway_Alive_T1$Identifier)
@@ -133,13 +135,13 @@ FY_BY_Giveaway_Case_4 <-
 
 Vector_FY_BY_Giveaway_Case_4 <-
    unique(FY_BY_Giveaway_Case_4$Identifier)
-  
+
 ## c) Preparing the data for the Chi Square
 Chi_Fisher_Giveaway_Y2017_Y2024 <-
   General_Giveaway_Y2017_Y2024 |>
   filter(Site_Type %in% (c("Backyard","Front Yard"))) |>
-  filter(!Identifier %in% Vector_FY_BY_Giveaway_Case_4) |>
-  rbind(FY_BY_Giveaway_Case_4) |>
+  # filter(!Identifier %in% Vector_FY_BY_Giveaway_Case_4) |>
+  # rbind(FY_BY_Giveaway_Case_4) |>
   mutate(City = ifelse(City == "CHELSEA", "Chelsea", "Holyoke")) |> #I have checked preemptively and these are the only two ones available
   mutate(
      Yard = fct_recode(Site_Type #using fct_recode since making factors and setting names
@@ -160,8 +162,8 @@ Chi_Fisher_Giveaway_Y2017_Y2024 <-
     )
     , city = factor(City, levels = c("Chelsea","Holyoke"))
   ) |>
- dplyr::select(Identifier, City, Yard, Time, Status) |>
-  filter(!is.na(Status)) #If you filter for just these ones, it shows 5 :) | Code works perfectly from my understanding
+ tidylog::select(Identifier, City, Yard, Time, Status) |>
+ filter(!is.na(Status)) #If you filter for just these ones, it shows 5 :) | Code works perfectly from my understanding
 ```
 
 # 2. Chi Square Tests & Fisher Tests
@@ -174,10 +176,10 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
    tabyl(Time, Status) |>
   adorn_totals("row") 
 
-# 2. Creating the table for percentages | Time and survivorship
+# 2. Creating the table for percentages | Time and survivorship #Fix the ways death is represent
 Chi_Fisher_Giveaway_Y2017_Y2024 |>
   tabyl(Time, Status) |>
-  adorn_totals("row") |>
+  adorn_totals("col") |>
   adorn_percentages("col") |>
   adorn_pct_formatting(digits = 1)
 
@@ -188,9 +190,9 @@ Survivorship_Chi_Square <-
 Survivorship_Chi_Square
 Survivorship_Chi_Square |> broom::tidy()
 
-# or
+# or #EM: Look at this and convert
 Chi_Fisher_Giveaway_Y2017_Y2024 |> 
-  janitor::tabyl(Time, Status) |> 
+  janitor::tabyl(Time, Status) |>  # Use tabyl for pipe framework
   janitor::chisq.test() |> 
   broom::tidy()
 
@@ -216,7 +218,7 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
        , `Alive (%)` = 100*(Alive/Total)
        , `Dead (%)`  = 100*(Dead/Total)
   ) |>
-  dplyr::select(Time, Yard, Total, `Alive (%)`, `Dead (%)`)
+  tidylog::select(Time, Yard, Total, `Alive (%)`, `Dead (%)`)
 
 # 3. Running the Fisher tests
 ## a) Time 1 Fisher Test
@@ -262,7 +264,7 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
        , `Alive (%)` = 100*(Alive/Total)
        , `Dead (%)`  = 100*(Dead/Total)
   ) |>
-  dplyr::select(Time, City, Total, `Alive (%)`, `Dead (%)`)
+  tidylog::select(Time, City, Total, `Alive (%)`, `Dead (%)`)
 
 # 3. Running the Fisher tests
 ## a) Time 1 Fisher Test
@@ -321,7 +323,7 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
    , `Alive (%)` = round(100 * (Alive / Total), 1)
    , `Dead (%)`  = round(100 * (Dead  / Total), 1)
   ) |>
-  dplyr::select(Time, City, Yard, Total, `Alive (%)`, `Dead (%)`) |>
+  tidylog::select(Time, City, Yard, Total, `Alive (%)`, `Dead (%)`) |>
   arrange(Time, City, Yard)
 
 # DHL where is the chi-square analyses?
@@ -349,7 +351,9 @@ survival_curve_data <-
         , !is.na(Event) # Makes sure that it has some sort of event status
         , !is.na(Yard) # Ensures only those that are Backyard or Front yard
         ) |>
-  tidylog::distinct() # Since they are duplicates and cna remove
+  distinct()
+
+
 
 # DHL: that's a really big loss, is that intentional? 
 # EM: yea...the reason is that the code summarizes the data but it counts each tree twice | since it was time long and needs to be time wide, instead of pivoting and then doing that, I decided to go with distinct (it works the same from my understanding)
@@ -632,6 +636,13 @@ survdiff(Surv(Time, Event) ~ City + Residential, data = Research_Survival_Curve_
 
 # Takeaways: Doesn't seem to have too large of a difference besides right-of-way trees which continues to highlight the greater literature; insignificance though for FY BY. interestingly, right-of-way wasn't that high too
 ```
+
+```{r}
+
+
+
+```
+
 
 End takeways (V2):
 - Location does seem to matter for tree survivorship, more generally if it is in a residential vs non-residential space. However, specific locations within a residential area may not lead to—at least from this dataset—any significance. As you can see, even including right-of-way, the p-value (<0.07) and tht there isn't ny experienced difference in survivorship between Front, Side, Back, and Right-of-way
