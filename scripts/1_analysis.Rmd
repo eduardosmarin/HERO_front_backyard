@@ -687,6 +687,21 @@ coxph_add <-
     , data = Research_Survival_Curve_Data
   )
 
+
+# cox interaction
+coxph_int <-
+  survival::coxph(
+    Surv(Time, Event) ~ City*Residential # INTERACTION
+    , data = Research_Survival_Curve_Data
+  )
+
+# model comparison
+performance::compare_performance(
+    coxph_add
+  , coxph_int
+  , rank = TRUE)
+
+# this is how I would look at each model. But I would really only look at the model that compare_performance deems best.
 coxph_add
 coxph_add |> broom::tidy()
 coxph_add |> ggeffects::ggpredict()
@@ -696,21 +711,18 @@ coxph_add |>
   plot(facets = TRUE) + 
   geom_hline(yintercept = 1)
 
-# cox interaction
-coxph_int <-
-  survival::coxph(
-    Surv(Time, Event) ~ City*Residential # INTERACTION
-    , data = Research_Survival_Curve_Data
-  )
+
 
 coxph_int
 coxph_int |> broom::tidy()
 coxph_int |> ggeffects::ggpredict()
-coxph_int |> ggeffects::ggpredict() |> plot()
 
-performance::compare_performance(
-    coxph_add
-  , coxph_int
-  , rank = TRUE)
+coxph_int |>
+    ggeffects::ggpredict(terms = c('City', 'Residential')) 
+
+
+coxph_int |>
+    ggeffects::ggpredict(terms = c('City', 'Residential')) |> plot()
+
 ```
 
