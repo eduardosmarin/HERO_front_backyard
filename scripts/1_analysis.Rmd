@@ -352,9 +352,20 @@ survival_curve_data <-
         , !is.na(Yard) # Ensures only those that are Backyard or Front yard
         ) |>
   distinct()
+```
 
 
+```{r}
+# General_Giveaway_Y2017_Y2024 has the right structure. See for example 
 
+General_Giveaway_Y2017_Y2024 |> tabyl(Identifier) |> tabyl(n) # they all have two. 
+
+General_Giveaway_Y2017_Y2024 |> filter(Identifier == 'CHELSEA_352')
+# as an example yield two rows.
+```
+
+
+```{r}
 # DHL: that's a really big loss, is that intentional? 
 # EM: yea...the reason is that the code summarizes the data but it counts each tree twice | since it was time long and needs to be time wide, instead of pivoting and then doing that, I decided to go with distinct (it works the same from my understanding)
 
