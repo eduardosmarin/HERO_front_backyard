@@ -704,7 +704,7 @@ performance::compare_performance(
 # this is how I would look at each model. But I would really only look at the model that compare_performance deems best.
 coxph_add
 coxph_add |> broom::tidy()
-coxph_add |> ggeffects::ggpredict()
+coxph_add |> ggeffects::ggpredict() # Other combinations are not significa
 coxph_add |> ggeffects::ggpredict() |> plot()
 coxph_add |>
   ggeffects::ggpredict(terms = c('City', 'Residential')) |> 

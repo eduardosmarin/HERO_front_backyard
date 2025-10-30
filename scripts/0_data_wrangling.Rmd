@@ -99,7 +99,7 @@ Chelsea_Property_Data_Append_Y2019 <-
             , sheet = "Chelsea_2019"
             , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
     setNames(Standard_Names) |>
-    dplyr::select(1:18, 28:36,38) |>
+    tidylog::select(1:18, 28:36,38) |>
     mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
                   Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
                   Residential_Area, Units, Number_Rooms, Stories),
@@ -115,12 +115,12 @@ Chelsea_Property_Data_Append_Y2019 <-
   mutate(Year_Dataset = "2019") |>
   rename_with(~ paste0("Parcel_", .x)) |>
   mutate(Time_Period = "Time 1") |>
-  dplyr::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
       
 Chelsea_Property_Data_Y2019 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Chelsea_CY19_FY19/M057TaxPar_CY19_FY19.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
-  dplyr::select(4, 13) |>
+  tidylog::select(4, 13) |>
   left_join(Chelsea_Property_Data_Append_Y2019, by = "Parcel_Location_ID") 
 
 ## b. Creating the Chelsea (2023) Shapefile
@@ -129,7 +129,7 @@ Chelsea_Property_Data_Append_Y2023 <-
             , sheet = "Chelsea_2023"
             , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
     setNames(Standard_Names) |>
-    dplyr::select(1:18, 28:36,38) |>
+    tidylog::select(1:18, 28:36,38) |>
     mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
                   Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
                   Residential_Area, Units, Number_Rooms, Stories),
@@ -138,12 +138,12 @@ Chelsea_Property_Data_Append_Y2023 <-
     mutate(Year_Dataset = "2023") |>
    rename_with(~ paste0("Parcel_", .x)) |>
     mutate(Time_Period = "Time 2") |>
-  dplyr::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
 
 Chelsea_Property_Data_Y2023 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Chelsea_CY23_FY24/M057TaxPar_CY23_FY24.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
-  dplyr::select(4, 13) |>
+  tidylog::select(4, 13) |>
   left_join(Chelsea_Property_Data_Append_Y2023, by = "Parcel_Location_ID") 
   
 ## c. Creating the Holyoke (2019) Shapefile
@@ -152,7 +152,7 @@ Holyoke_Property_Data_Append_Y2019 <-
             , sheet = "Holyoke_2019"
             , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
     setNames(Standard_Names) |>
-    dplyr::select(1:18, 28:36,38) |>
+    tidylog::select(1:18, 28:36,38) |>
     mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
                   Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
                   Residential_Area, Units, Number_Rooms, Stories),
@@ -168,12 +168,12 @@ Holyoke_Property_Data_Append_Y2019 <-
     ) |>
   rename_with(~ paste0("Parcel_", .x)) |>
   mutate(Time_Period = "Time 1") |>
-  dplyr::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
       
 Holyoke_Property_Data_Y2019 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Holyoke_CY19_FY20/M137TaxPar_CY19_FY20.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
-  dplyr::select(4, 13) |>
+  tidylog::select(4, 13) |>
   left_join(Holyoke_Property_Data_Append_Y2019, by = "Parcel_Location_ID") 
 
 ## d. Creating the Holyoke (2023) Shapefile
@@ -182,7 +182,7 @@ Holyoke_Property_Data_Append_Y2023 <-
             , sheet = "Holyoke_2023"
             , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
    setNames(Standard_Names) |>
-    dplyr::select(1:18, 28:36,38) |>
+    tidylog::select(1:18, 28:36,38) |>
     mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
                   Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
                   Residential_Area, Units, Number_Rooms, Stories),
@@ -191,12 +191,12 @@ Holyoke_Property_Data_Append_Y2023 <-
     mutate(Year_Dataset = "2023") |>
     rename_with(~ paste0("Parcel_", .x)) |>
     mutate(Time_Period = "Time 2") |>
-  dplyr::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
 
 Holyoke_Property_Data_Y2023 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Holyoke_CY23_FY23/M137TaxPar_CY23_FY23.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
-  dplyr::select(4, 13) |>
+  tidylog::select(4, 13) |>
   left_join(Holyoke_Property_Data_Append_Y2023, by = "Parcel_Location_ID") 
 
 ```
@@ -285,6 +285,8 @@ Pre_Chelsea_Giveaways <-
 Pre_Holyoke_Giveaways <-
   read_csv("input_data/Holyoke/Tree Giveaways/holy_random_clean_fixed.csv") 
 
+
+
 # 2. Cleaning early the datasets Chelsea, MA and Holyoke, MA before Giveaway data
 ## a) Renaming and simple cleaning the Chelsea, MA Dataset
 Pre_Chelsea_Giveaway_Data_Y2017_Y2024 <-
@@ -336,7 +338,7 @@ Pre_Chelsea_Giveaway_Data_Y2017_Y2024 <-
     , Northing                     = Y
   ) |>
   mutate(Date_Surveyed_2017 = NA_character_) |>
-  dplyr::select (
+  tidylog::select (
       Unique_ID              
     , Address                  
     # , Owner_Address_P1             
@@ -446,7 +448,7 @@ Pre_Holyoke_Giveaway_Data_Y2017_Y2024 <-
        , Comment_Survey_2024 = NA_character_
        , Address = NA_character_
    ) |>
-  dplyr::select (
+  tidylog::select (
       Unique_ID                
     , Address                  
     # , Owner_Address_P1             
@@ -537,14 +539,14 @@ Holyoke_Giveaway_Addresses <-
 ### v) Creating new data frame to append
 Holyoke_Short_Label <-
   Holyoke_Giveaway_Addresses |>
-  dplyr::select(Unique_ID, ShortLabel)
+  tidylog::select(Unique_ID, ShortLabel)
 
 ### vi) Appending the data
 Pre_Holyoke_Giveaway_Data_Y2017_Y2024 <-
   Pre_Holyoke_Giveaway_Data_Y2017_Y2024 |>
   left_join(Holyoke_Short_Label, by = "Unique_ID") |>
   mutate(Address = ShortLabel) |>
-  dplyr::select(-ShortLabel)
+  tidylog::select(-ShortLabel)
 
 # 4. Finding the Days since Planted for Chelsea, MA and Holyoke, MA | Chelsea, 2017 is missing 
 ## a) Finding the Days since Planted for Holyoke, MA
@@ -572,7 +574,7 @@ Holyoke_Surveyed_Month_Y2017 <-
   , .groups = "drop"
   ) |>
   arrange(Month_Number) |>
-  dplyr::select(-Month_Number)
+  tidylog::select(-Month_Number)
   
 as.data.frame(Holyoke_Surveyed_Month_Y2017) 
 
@@ -604,7 +606,7 @@ Chelsea_Giveaway_Data_Y2017_Y2024 <-
       TRUE ~ Date_Surveyed_2017
     )
   ) |>
-  dplyr::select(-Has_Survey_2017) |>
+  tidylog::select(-Has_Survey_2017) |>
   mutate(
     Days_Since_Planted_2017 = as.numeric(Date_Surveyed_2017 - Date_Planted)
   , Days_Since_Planted_2024 = as.numeric(Date_Surveyed_2024 - Date_Planted)
@@ -646,7 +648,7 @@ Pre_Broadleaf_Conifer_Table_V1 <-
   group_by(Species, Broadleaf_Conifer) |>  
   summarize(Count = n(), .groups = "drop") |> 
   arrange(Species) |>
-  dplyr::select(-Count) |>
+  tidylog::select(-Count) |>
   rename(Broadleaf_Conifer = Broadleaf_Conifer)
 
 ## b. Performing some double checks
@@ -737,7 +739,7 @@ Pre_i_Tree_Table_V2 <-
   read_excel("input_data/General/i_Tree_Appendix.xls.xlsx"
            , sheet = "i-Tree Species List"
            , n_max = 19) |>
-  dplyr::select(1:8)
+  tidylog::select(1:8)
 # For note, species like Quercus x warei, Prunus x incam, Malus x domestica, & Other [genus spp.] were the only ones without any information. This is due to not being able to find a respective i-Tree value. 
 
 ## d. Merging both these trees for potential iTree analysis
@@ -746,7 +748,7 @@ i_Tree_Table <-
     Pre_i_Tree_Table_V1
   , Pre_i_Tree_Table_V2
     ) |>
-  dplyr::select(-`Genus Name`, -`Species Name`, -Synonym, -Family, -Order, -Class, -`Common Name`) |>
+  tidylog::select(-`Genus Name`, -`Species Name`, -Synonym, -Family, -Order, -Class, -`Common Name`) |>
   rename_with(~ paste0("Ecological_", .x)
           , .cols = -any_of(c("Genus_Name","Species","i_Tree_Code")) # Trying to make these not be note selected
     )
@@ -759,21 +761,21 @@ i_Tree_Table <-
 ## a) Preparing the necessary layers needed
 Pre_Parcel_Data_Y2019 <- 
   bind_rows(Holyoke_Property_Data_Y2019, Chelsea_Property_Data_Y2019) |>
-  dplyr::select(-Time_Period) |>
+  tidylog::select(-Time_Period) |>
   filter(!is.na(Parcel_Unique_ID))
 
 Pre_Parcel_Data_Y2023 <- 
   bind_rows(Holyoke_Property_Data_Y2023, Chelsea_Property_Data_Y2023) |>
-  dplyr::select(-Time_Period) |>
+  tidylog::select(-Time_Period) |>
   filter(!is.na(Parcel_Unique_ID))
 
 Pre_Census_Data_Y2017 <- 
   bind_rows(Holyoke_CBG_Data_Y2017, Chelsea_CBG_Data_Y2017) |>
-  dplyr::select(-Time_Period) 
+  tidylog::select(-Time_Period) 
 
 Pre_Census_Data_Y2023 <- 
   bind_rows(Holyoke_CBG_Data_Y2023, Chelsea_CBG_Data_Y2023) |>
-  dplyr::select(-Time_Period) 
+  tidylog::select(-Time_Period) 
 
 ## b. Calculating each giveaway and choosing the largest polygon
 ### i) Finding for parcels, which is more challenging since not all are within
@@ -788,7 +790,7 @@ Within_Giveaways_Parcel_Data_Y2019 <-
   Pre_Giveaways_Parcel_Data_Y2019 |>
   filter(!is.na(Parcel_Property_ID)) |>
   st_drop_geometry() |>
-  dplyr::select(City, Time_Period, Unique_ID, starts_with("Parcel"))
+  tidylog::select(City, Time_Period, Unique_ID, starts_with("Parcel"))
 
 #### 2019, Finding all missing points
 Missing_Giveaways_Parcel_Data_Y2019 <- 
@@ -805,11 +807,11 @@ Nearest_Giveaways_Parcel_Data_Y2019 <-
   Pre_Parcel_Data_Y2019 |> 
   st_drop_geometry() |>                                      
   slice(Nearest_Indexes_Y2019) |> # Selecting based on the closest parcels
-  dplyr::select(starts_with("Parcel")) |>                   
+  tidylog::select(starts_with("Parcel")) |>                   
   bind_cols(
     Missing_Giveaways_Parcel_Data_Y2019 |> 
       st_drop_geometry() |> 
-      dplyr::select(City, Time_Period, Unique_ID) 
+      tidylog::select(City, Time_Period, Unique_ID) 
   )
 
 #### 2019, Merging the Dataset
@@ -828,7 +830,7 @@ Within_Giveaways_Parcel_Data_Y2023 <-
   Pre_Giveaways_Parcel_Data_Y2023 |>
   filter(!is.na(Parcel_Property_ID)) |>
   st_drop_geometry() |>
-  dplyr::select(City, Time_Period, Unique_ID, starts_with("Parcel"))
+  tidylog::select(City, Time_Period, Unique_ID, starts_with("Parcel"))
 
 #### 2023, Finding all missing points
 Missing_Giveaways_Parcel_Data_Y2023 <- 
@@ -845,11 +847,11 @@ Nearest_Giveaways_Parcel_Data_Y2023 <-
   Pre_Parcel_Data_Y2023 |> 
   st_drop_geometry() |>                                      
   slice(Nearest_Indexes_Y2023) |> # Selecting based on the closest parcels
-  dplyr::select(starts_with("Parcel")) |>                   
+  tidylog::select(starts_with("Parcel")) |>                   
   bind_cols(
     Missing_Giveaways_Parcel_Data_Y2023 |> 
       st_drop_geometry() |> 
-      dplyr::select(City, Time_Period, Unique_ID) 
+      tidylog::select(City, Time_Period, Unique_ID) 
   )
 
 #### 2023, Merging the Dataset
@@ -864,7 +866,7 @@ Giveaway_Census_Data_Y2017 <-
   filter(Time_Period == "Time 1") |> 
   st_join(Pre_Census_Data_Y2017, left = TRUE, largest = TRUE) |> # Selecting the largest
   st_drop_geometry() |>
-  dplyr::select(City, Time_Period, Unique_ID, starts_with("Census"))
+  tidylog::select(City, Time_Period, Unique_ID, starts_with("Census"))
 
 Giveaway_Census_Data_Y2023 <- 
   Pre_V1_Giveaway_Y2017_Y2024 |> 
@@ -872,7 +874,7 @@ Giveaway_Census_Data_Y2023 <-
   filter(Time_Period == "Time 2") |> 
   st_join(Pre_Census_Data_Y2023, left = TRUE, largest = TRUE) |> # Selecting the largest
   st_drop_geometry() |>
-  dplyr::select(City, Time_Period, Unique_ID, starts_with("Census"))
+  tidylog::select(City, Time_Period, Unique_ID, starts_with("Census"))
 
 ## c. Merging the columns based on theme
 Giveaway_Parcel_Data_Y2019_Y2023 <-
@@ -903,7 +905,7 @@ Pre_V3_Giveaway_Y2017_Y2024 <-
     , TRUE ~ NA_character_      
     )
   ) |>
-  dplyr::select(-Month, -Broadleaf_Conifer) |>
+  tidylog::select(-Month, -Broadleaf_Conifer) |>
   mutate(
        , Basal_Sprouts = case_when(
             Basal_Sprouts %in% c("No","N") ~ "No"
@@ -978,7 +980,7 @@ Giveaway_Survival_Data <-
   Pre_V3_Giveaway_Y2017_Y2024 |>
     # filter(Site_Type == c("Backyard", "Front Yard")) |>
   st_drop_geometry() |>
-  dplyr::select(City, Unique_ID, Date_Planted, Time_Period, Date_Surveyed, Mortality_Status) |>
+  tidylog::select(City, Unique_ID, Date_Planted, Time_Period, Date_Surveyed, Mortality_Status) |>
   pivot_wider(
     id_cols     = c(City, Unique_ID, Date_Planted)
   , names_from  = Time_Period          
@@ -1024,7 +1026,7 @@ Giveaway_Survival_Data <-
   ) |>
   filter(!is.na(Days_In_Ground), Days_In_Ground >= 0) |>
   filter(Inspection_Date < ymd("2025-07-01")) |>
-  dplyr::select(City, Unique_ID, Days_In_Ground, Status, Inspection, Inspection_Date, Has_T1_Observation, Has_T2_Observation) |>
+  tidylog::select(City, Unique_ID, Days_In_Ground, Status, Inspection, Inspection_Date, Has_T1_Observation, Has_T2_Observation) |>
   rename_with(
         ~ paste0("Survival_", .x)
       , .cols = !any_of(c("City", "Unique_ID"))
@@ -1034,7 +1036,7 @@ Giveaway_Survival_Data <-
 Final_Giveaway_Y2017_Y2024 <-
   Pre_V3_Giveaway_Y2017_Y2024 |>
   left_join(Giveaway_Survival_Data, by = c("City","Unique_ID")) |>
-  dplyr::select(
+  tidylog::select(
   Unique_ID                                
 , City                                         
 , Address                                      
@@ -1160,7 +1162,7 @@ Final_Giveaway_Y2017_Y2024 <-
   mutate(Identifier = paste0(City, "_", Unique_ID)) |>
   rename(Ecological_Native_Status = Native_Status
         , Ecological_Deciduous_Evergreen = Deciduous_Evergreen) |>
-  dplyr::select(103, 1:102)
+  tidylog::select(103, 1:102)
 
 Final_Giveaway_Y2017_Y2024 |>
   st_write(paste0("input_data/Final_Giveaway_Y2017_Y2024_", Sys.Date(), ".gpkg")) # Changed it to have the sys.date
@@ -1170,7 +1172,11 @@ Final_Giveaway_Y2017_Y2024 |>
 
 ## a) Double checking missignness with mortality
 ```{r}
-Final_Giveaway_Y2017_Y2024 |>
+Final_Giveaway_Y2017_Y2024 |> 
+  mutate(Mortality_Status = case_when(
+    Mortality_Status %in% c("Removed","Standing Dead","Stump") ~ "Dead"
+  , Mortality_Status == "Alive" ~ "Alive"
+  , TRUE ~ Mortality_Status ) )|> #John: Confirm why there would be an NA; they got the planting records from the city and went to a random sub-set; did not have the human-power to go to all of them. They have the lat-long, and the species, and the date, and they weren't able to add their own data from HERO. 
   st_drop_geometry() |>
   tabyl(City, Time_Period, Mortality_Status) # This is the issue <- there are SO many NAs in 2017; checked the original data, and it has the same finding. Thus, survivorship becomes challenging to determine and gives the false sense of high survivorship rate. That is the issue currently with the data. But still, pretty interesting
 ```
@@ -1297,21 +1303,21 @@ Massachusetts_CBG_Data_Y2017 <-
     , output = 'wide'
     , moe_level = 95
     ) |>
-    dplyr::select(-dplyr::ends_with('M')) |>
-    dplyr::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
+    tidylog::select(-tidylog::ends_with('M')) |>
+    tidylog::rename_with(~ gsub('E$', '', .x), tidylog::ends_with('E')) |>
     rename(NAME = NAM) |>
     tidyr::separate( 
         NAME
       , into = c('Block', 'Tract', 'County', 'State')
       , sep  = ', '
       ) |> 
-    dplyr::mutate(
-      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
+    tidylog::mutate(
+      Total_Population_Over_25 = tidylog::na_if(Total_Population_Over_25, 0)
     , Percentage_At_Least_High_School =
-        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
+        rowSums(tidylog::across(tidylog::starts_with('ed_')), na.rm = TRUE) /
         Total_Population_Over_25
     , Percentage_At_Least_College =
-        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
+        rowSums(tidylog::across(tidylog::starts_with('ed_plus')), na.rm = TRUE) /
         Total_Population_Over_25
     ) |>
     mutate(Median_Household_Income_Adjusted_2023 = Median_Household_Income_Adjusted_2023*(326.016/267.033)
@@ -1329,7 +1335,7 @@ Massachusetts_CBG_Data_Y2017 <-
          , Owner_Occupied_Percentage = (Owner_Occupied/Tenure_Population)
          , Renter_Occupied_Percentage = (Renter_Occupied/Tenure_Population)
          ) |>
-    dplyr::select(-dplyr::starts_with('ed_')) |>
+    tidylog::select(-tidylog::starts_with('ed_')) |>
     mutate(Year_Dataset = "2017") |>
     rename_with(~ paste0("Census_", .x)
               ,  .cols = -any_of("geometry")) |> #Making sure geometry doesn't change name
@@ -1350,21 +1356,21 @@ Massachusetts_CBG_Data_Y2023 <-
     , output = 'wide'
     , moe_level = 95
     ) |>
-    dplyr::select(-dplyr::ends_with('M')) |>
-    dplyr::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
+    tidylog::select(-tidylog::ends_with('M')) |>
+    tidylog::rename_with(~ gsub('E$', '', .x), tidylog::ends_with('E')) |>
     rename(NAME = NAM) |> 
     tidyr::separate( 
         NAME
       , into = c('Block', 'Tract', 'County', 'State')
       , sep  = '; ' # The delimiter for 2023 was for some reason different?
       ) |> 
-    dplyr::mutate(
-      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
+    tidylog::mutate(
+      Total_Population_Over_25 = tidylog::na_if(Total_Population_Over_25, 0)
     , Percentage_At_Least_High_School =
-        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
+        rowSums(tidylog::across(tidylog::starts_with('ed_')), na.rm = TRUE) /
         Total_Population_Over_25
     , Percentage_At_Least_College =
-        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
+        rowSums(tidylog::across(tidylog::starts_with('ed_plus')), na.rm = TRUE) /
         Total_Population_Over_25
     ) |>
     mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
@@ -1379,7 +1385,7 @@ Massachusetts_CBG_Data_Y2023 <-
          , Owner_Occupied_Percentage = (Owner_Occupied/Tenure_Population)
          , Renter_Occupied_Percentage = (Renter_Occupied/Tenure_Population)
          ) |>
-    dplyr::select(-dplyr::starts_with('ed_')) |>
+    tidylog::select(-tidylog::starts_with('ed_')) |>
     mutate(Year_Dataset = "2023") |>
     rename_with(~ paste0("Census_", .x)
               ,  .cols = -any_of("geometry")) |>
