@@ -4,7 +4,7 @@ subtitle: "Creating the Final Product for the Data Analysis"
 author: "Eduardo Marin"
 date: "`r format(Sys.time())`"
 output:
-  pdf_document:
+  pFinal_Giveaway_Y2017_Y2024_document:
     toc: true
   html_document:
     theme: flatly
@@ -285,8 +285,6 @@ Pre_Chelsea_Giveaways <-
 Pre_Holyoke_Giveaways <-
   read_csv("input_data/Holyoke/Tree Giveaways/holy_random_clean_fixed.csv") 
 
-
-
 # 2. Cleaning early the datasets Chelsea, MA and Holyoke, MA before Giveaway data
 ## a) Renaming and simple cleaning the Chelsea, MA Dataset
 Pre_Chelsea_Giveaway_Data_Y2017_Y2024 <-
@@ -314,13 +312,13 @@ Pre_Chelsea_Giveaway_Data_Y2017_Y2024 <-
     , DBH_2017                     = DBH1_17
     , Mortality_Status_2017        = M_17
     , Vigor_2017                   = V_17
-    , Land_Use_2017                = LUse_17
+    # , Land_Use_2017                = LUse_17
     # , Site_Type_2017               = StTp_17  
     , Width_2017                   = Wth_17
     , Common_Name                  = CommonName
-    , Unique_ID                    = NewTrID 
+    , Unique_ID                    = OID_ #EM: Was a mistake previously 
     , Site_Type                    = StTp_24
-    , Land_Use_2024                = LUse_24
+    , Land_Use                     = LUse_24
     , Basal_Sprouts_2024           = Bsp_24 # Seems to be less comprehensive
     , Vigor_2024                   = V_24
     , Conditions_2024              = Con_24 # Condition for all the years
@@ -358,8 +356,8 @@ Pre_Chelsea_Giveaway_Data_Y2017_Y2024 <-
     , Deciduous_Evergreen          
     , Broadleaf_Conifer            
     , Public_Private    
-    , Land_Use_2017
-    , Land_Use_2024
+    # , Land_Use_2017
+    , Land_Use
     # , Site_Type_2017  
     , Site_Type     
     , Vigor_2017
@@ -390,8 +388,7 @@ Pre_Chelsea_Giveaway_Data_Y2017_Y2024 <-
     Date_Surveyed_2024 = str_trim(Date_Surveyed_2024) # Removes extra spaces / might not need this
   , Date_Surveyed_2024 = str_replace(Date_Surveyed_2024, " .*$", ""), # Finds the first space and deletes everything afterwards
   , Date_Surveyed_2024 = mdy(Date_Surveyed_2024) # Puts it in MYD
-  ) |>
- slice(-1500) #Removing one extra 774 unique_id from our dataset
+  )
 
 ## a) Renaming and simple cleaning the Holyoke, MA Dataset
 # 2. Overview of all the variables (including all of the years surveyed)
@@ -422,12 +419,12 @@ Pre_Holyoke_Giveaway_Data_Y2017_Y2024 <-
     , DBH_2017                     = DBH1_17
     , Mortality_Status_2017        = M_17
     , Vigor_2017                   = V_17
-    , Land_Use_2017                = LUse_17
+    # , Land_Use_2017                = LUse_17
     # , Site_Type_2017               = StTp_17  
     , Width_2017                   = Wth_17
     , Common_Name                  = commonName
     , Unique_ID                    = NewTreeID 
-    , Land_Use_2024                = LUse_24
+    , Land_Use                     = LUse_24
     , Basal_Sprouts_2024           = BSp_24 # Seems to be less comprehensive
     , Vigor_2024                   = V_24
     , Conditions_2024              = Con_24 # Condition for all the years
@@ -467,8 +464,8 @@ Pre_Holyoke_Giveaway_Data_Y2017_Y2024 <-
     , Deciduous_Evergreen          
     , Broadleaf_Conifer            
     , Public_Private   
-    , Land_Use_2017
-    , Land_Use_2024 
+    # , Land_Use_2017
+    , Land_Use 
     # , Site_Type_2017
     , Site_Type  
     , Vigor_2017
@@ -726,10 +723,10 @@ Pre_i_Tree_Table_V1 |>
 
 ### ii) Checking which species do not have currently a partner 
 Unmatched_iTree_Species <- 
-  Pre_V1_Giveaway_Y2017_Y2024 %>%
-  distinct(Species) %>%
+  Pre_V1_Giveaway_Y2017_Y2024 |>
+  distinct(Species) |>
   anti_join(
-    Pre_i_Tree_Table_V1 %>% distinct(Species),
+    Pre_i_Tree_Table_V1 |> distinct(Species),
     by = "Species"
   )
 Unmatched_iTree_Species 
@@ -752,7 +749,6 @@ i_Tree_Table <-
   rename_with(~ paste0("Ecological_", .x)
           , .cols = -any_of(c("Genus_Name","Species","i_Tree_Code")) # Trying to make these not be note selected
     )
-  
 ```
 
 # 5. Tree Giveaway Data: Merging all datasets and final cleanings for Holyoke, MA and Chelsea, MA (2017 and 2023)
@@ -962,7 +958,7 @@ Pre_V3_Giveaway_Y2017_Y2024 <-
          mutate(
           General_Site_Type = case_when(
             Site_Type %in% c("Sidewalk Cutout", "Sidewalk Planting Strip") ~ "Street Trees"
-          , Site_Type %in% c("Back Yard", "Side Yard", "Front Yard") ~ "Yard Trees"
+          , Site_Type %in% c("Back Yard", "Backyard", "Side Yard", "Front Yard") ~ "Yard Trees"
           , Site_Type %in% c("Other Maintained", "Maintained Park") ~ "Maintained Area"
           , TRUE ~ NA_character_)
        , Research_Site_Type = case_when(
@@ -978,7 +974,7 @@ Pre_V3_Giveaway_Y2017_Y2024 <-
 # 3. Calculating Days in Ground for All Data
 Giveaway_Survival_Data <- 
   Pre_V3_Giveaway_Y2017_Y2024 |>
-    # filter(Site_Type == c("Backyard", "Front Yard")) |>
+   # filter(Site_Type == c("Backyard", "Front Yard")) |>
   st_drop_geometry() |>
   tidylog::select(City, Unique_ID, Date_Planted, Time_Period, Date_Surveyed, Mortality_Status) |>
   pivot_wider(
@@ -1036,6 +1032,22 @@ Giveaway_Survival_Data <-
 Final_Giveaway_Y2017_Y2024 <-
   Pre_V3_Giveaway_Y2017_Y2024 |>
   left_join(Giveaway_Survival_Data, by = c("City","Unique_ID")) |>
+  #--# Changes made to make sure we are having differences in the values
+  mutate(
+      Date_Surveyed = case_when(
+        Time_Period == "Time 1" & !is.na(Date_Planted) & Date_Planted > lubridate::as_date("2017-06-27") ~ NA_Date_
+      , Time_Period == "Time 1" & Survival_Status == 0 & Survival_Inspection == 2 & Date_Planted < lubridate::as_date("2017-05-30") ~ Chelsea_Median_Survey_Y2017
+      , TRUE ~ Date_Surveyed
+    )) |>
+  mutate(
+    Survival_Days_In_Ground = case_when(
+       Time_Period == "Time 2" & Survival_Status == 1 & Survival_Inspection == 1 ~ NA_integer_
+     , Time_Period == "Time 1" & Date_Planted > lubridate::as_date("2017-05-30") ~ NA_integer_
+     , !is.na(Date_Surveyed) & !is.na(Date_Planted) ~ as.integer(Date_Surveyed - Date_Planted)
+     , TRUE ~ Survival_Days_In_Ground
+    )
+  ) |>
+#---#
   tidylog::select(
   Unique_ID                                
 , City                                         
@@ -1164,13 +1176,109 @@ Final_Giveaway_Y2017_Y2024 <-
         , Ecological_Deciduous_Evergreen = Deciduous_Evergreen) |>
   tidylog::select(103, 1:102)
 
+
 Final_Giveaway_Y2017_Y2024 |>
-  st_write(paste0("input_data/Final_Giveaway_Y2017_Y2024_", Sys.Date(), ".gpkg")) # Changed it to have the sys.date
+st_write(paste0("input_data/Final_Giveaway_Y2017_Y2024_", Sys.Date(), ".gpkg")) # Changed it to have the sys.date
 ```
 
 # 6. Double Checks: Ensuring the datasets merged correctly for Holyoke, MA and Chelsea, MA (2017 and 2023) 
+## a) Double checking correct dates and other issues
+```{r}
+# 1. Number of Rows Per Trees | Should be 2
+Final_Giveaway_Y2017_Y2024 |>
+  st_drop_geometry() |>
+  count(Identifier, name = "n_rows") |>
+  tabyl(n_rows)
+# ESM: All rows have 2, which is good!
 
-## a) Double checking missignness with mortality
+# 2. Negative Days | An issue seen earlier
+Final_Giveaway_Y2017_Y2024 |>
+  st_drop_geometry() |>
+  summarise(
+    Count = n()
+  , `Negative Days` = sum(Survival_Days_In_Ground < 0, na.rm = TRUE)
+  )
+# ESM: All good, no negative survival days, so that was fixed
+
+# 3. Correct Time Days Length | Since T1 and T2 differ, making sure that T2 > T1 or T2 = T1 (those are for the ones that currently have NA and Alive in T1), unless its NA since T1 = Dead 
+DC_Vector_Dead_T1 <-
+  Final_Giveaway_Y2017_Y2024 |>
+  filter(Time_Period == "Time 1", Survival_Status == 1, Survival_Inspection == 1) |>
+  distinct(Identifier) |>
+  pull(Identifier) # Pull is kinda like the unique($), but you can |> it through just for your vectoe
+
+DC_Time_Day_T1 <-
+  Final_Giveaway_Y2017_Y2024 |> 
+  st_drop_geometry() |>
+  tidylog::select(Identifier, Time_Period, Survival_Days_In_Ground, Survival_Status, Survival_Inspection) |>
+  tidyr::pivot_wider(
+    names_from  = Time_Period
+  , values_from = Survival_Days_In_Ground
+  ) |>
+  dplyr::mutate(
+    Died_at_T1 = Identifier %in% DC_Vector_Dead_T1, # Making sure to not include those
+    Compliance = (Died_at_T1 & is.na(`Time 2`)) | (!is.na(`Time 1`) & !is.na(`Time 2`) & `Time 2` >= `Time 1`) | (is.na(`Time 1`) & is.na(`Time 2`)) | (is.na(`Time 1`) & !is.na(`Time 2`)) #These are all acceptable conditions as listed in the earlier description
+  )
+
+DC_Time_Day_T1 |>
+  summarise(`Proportion Compliance` = mean(Compliance, na.rm = TRUE)) 
+#ESM: This good, all of them are complying :)
+
+# 4. T1 Died Must Have T2 NAs
+Final_Giveaway_Y2017_Y2024 |>
+  st_drop_geometry() |>
+  filter(Time_Period == "Time 2", Survival_Status == 1, Survival_Inspection == 1) |>
+  summarise(All_T2_NAs = all(is.na(Survival_Days_In_Ground)))
+# ESM: True, so they are all NAs!
+
+# 5. Equal Days in T1 & T2 | There should not be any
+Final_Giveaway_Y2017_Y2024 |>
+  st_drop_geometry() |>
+  tidylog::select(Identifier, Time_Period, Survival_Days_In_Ground) |>
+  pivot_wider(
+    names_from  = Time_Period
+  , values_from = Survival_Days_In_Ground
+  ) |>
+  filter(!is.na(`Time 1`), !is.na(`Time 2`), `Time 1` == `Time 2`) |>
+  view() 
+# ESM to DHL: This is a problem but I reviewed the issue. Basically, these trees are the ones that were never surveyed in T1 and then they were reported as dead in T2. Either one of two things happened—(A) Alive T1, Dead T2 (B) Dead T1, Dead T2 (surveyed twice). On the more usual case, they were dead in T1; however, we cannot say that because they are NAs. We have to wait for John Rogan's response to see how to treat those cases. Our options, however, if not is either (A) overestimate mortality (B) underestimate mortality (C) exclude all together, limiting statistical power. Thoughts?
+
+# 6. Planting must happen before the survey date!
+Final_Giveaway_Y2017_Y2024 |>
+  filter(!is.na(Date_Planted), !is.na(Date_Surveyed), Date_Surveyed < Date_Planted) |>
+  tidylog::select(Identifier, City, Time_Period, Date_Planted, Date_Surveyed, Survival_Days_In_Ground) |>
+  arrange(Date_Surveyed) |>
+  view()
+# ESM: Doesn't seem to be any! :) That means the code earlier worked
+
+
+# 7. Listed as Dead in T1 | Alive in T2 (Checking if any exists)
+Dead <- c("Standing Dead","Removed","Stump") # Setting the values that are dead, like our mortality study
+
+Final_Giveaway_Y2017_Y2024 |> 
+  mutate(Dead_Status = Mortality_Status %in% Dead) |> #Give me TRUES for those that are dead
+  filter(Survival_Status == 1 & !Dead_Status) |> #Tell me which ones we just calculated as ALIVE but are DEAD (based on the calc earlier before the join)
+  filter(Time_Period == "Time 2") |> 
+  tidylog::select(Identifier, Time_Period, Mortality_Status, Survival_Status, Survival_Inspection, Date_Planted, Date_Surveyed, Survival_Days_In_Ground) |>
+  view()
+
+#ESM to DHL: These seem to be replantings. Basically, they are sharing the same IDs as the dead trees; however, they are currently alive with the new survey but have no Days_In_Ground because they were considered Dead in T1. There are two things we can do (1) Create new IDs for them and join them to our dataset; (2) Keep them exlcuded from our dataset. Not sure if we want to exclude replantings all together, include them as separate trees. Thoughts?
+
+# 8. Listed as Blank in T1 | Dead in T2 (Checking how many are there)
+Final_Giveaway_Y2017_Y2024 |> 
+  mutate(Dead_Status = Mortality_Status %in% Dead) |>
+  filter(Survival_Status == 1 & !Dead_Status) |>
+  filter(Time_Period == "Time 1") |>
+  filter(is.na(Mortality_Status)) |> # Doesn't have a mortality, so blank
+  tidylog::select(Identifier, Time_Period, Mortality_Status, Survival_Status,
+         Survival_Inspection, Date_Planted, Date_Surveyed, Survival_Days_In_Ground) |>
+  filter(!is.na(Survival_Days_In_Ground)) |>
+  view() # Sort of the opposite, we are checking when they are considered DEAD but are calculated as Alive (based on the cal earlier before the join) | it is not that they are alive, but
+
+# ESM to DHL: As mentioned earlier, these are the trees that seem to have blanks and are considered dead in T2 (making sure we also do not include those that have had a previous value saying they are dead). The issue here is that these are making the survival rate really high, when in reality, like mentioned earlier—they likely could've died in T2. A question of what we should do moving forward now. 
+```
+
+## b) Double checking missignness with mortality
 ```{r}
 Final_Giveaway_Y2017_Y2024 |> 
   mutate(Mortality_Status = case_when(
@@ -1181,7 +1289,7 @@ Final_Giveaway_Y2017_Y2024 |>
   tabyl(City, Time_Period, Mortality_Status) # This is the issue <- there are SO many NAs in 2017; checked the original data, and it has the same finding. Thus, survivorship becomes challenging to determine and gives the false sense of high survivorship rate. That is the issue currently with the data. But still, pretty interesting
 ```
 
-## b) Checking Other
+## c) Checking Other
 ```{r Double Checks for Holyoke, MA and Chelsea, MA}
 # 1. Missingness
 Final_Giveaway_Y2017_Y2024 |> 
@@ -1218,9 +1326,7 @@ Final_Giveaway_Y2017_Y2024 |>
   facet_wrap(~City) +
   theme_bw(16) +
   NULL
-```
 
-```{r}
 Pre_V1_Giveaway_Y2017_Y2024 |>
   filter(Time_Period == "Time 2") |>
   st_drop_geometry() |> 

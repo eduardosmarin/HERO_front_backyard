@@ -66,7 +66,7 @@ vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE,
 ```{r}
 # 1. Reading in the final giveaway data set
 Final_Giveaway_Y2017_Y2024 <-
-  st_read("input_data/Final_Giveaway_Y2017_Y2024_2025-10-27.gpkg") |>
+  st_read("input_data/Final_Giveaway_Y2017_Y2024_2025-11-01.gpkg") |>
   st_drop_geometry()
 
 # 2. Developing the code used for the General Survivorship Curves, which can be subsetted later based on other factors
@@ -337,21 +337,24 @@ Decided to create survivorship curves because of all of the previous effort done
 ## a) Landscape Mullets
 ```{r}
 # 1. Building the survival-ready long dataframe
-survival_curve_data <-
+Yard_Survival_Curve_Data <-
   General_Giveaway_Y2017_Y2024 |>
   filter(Site_Type %in% c("Front Yard", "Backyard")) |>
-  transmute( #Just learned about this, cool since its like a combination of select & mutate
-    Identifier   = Identifier
-  , City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
-  , Yard = fct_recode(Site_Type, "Front" = "Front Yard", "Back" = "Backyard")
-  , Time = as.numeric(Survival_Days_In_Ground)
-  , Event = Survival_Status # Calculated in the First step | Equivalent to Dexter's bin where 0 is alive and 1 is something happened
+  mutate(
+     City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
+   , Yard = fct_recode(Site_Type, "Front" = "Front Yard", "Back" = "Backyard")
+   , Time = as.numeric(Survival_Days_In_Ground) # Trying to ignore the NAs
+   , Event = Survival_Status
   ) |>
-  filter(!is.na(Time) # Keeps rows where time is not missing
-        , !is.na(Event) # Makes sure that it has some sort of event status
-        , !is.na(Yard) # Ensures only those that are Backyard or Front yard
-        ) |>
-  distinct()
+  filter(
+     !is.na(Time)
+   , !is.na(Event)
+   , !is.na(Yard)
+  ) |>
+  tidylog::select(-starts_with("Census_")) |> #Like you mentioned earlier, now we have the option to select and deselect from these exact variables | we can explore within each category
+  tidylog::select(-starts_with("Ecological_")) |>
+  tidylog::select(-starts_with("Parcel_"))
+
 ```
 
 
@@ -360,7 +363,7 @@ survival_curve_data <-
 
 General_Giveaway_Y2017_Y2024 |> tabyl(Identifier) |> tabyl(n) # they all have two. 
 
-General_Giveaway_Y2017_Y2024 |> filter(Identifier == 'CHELSEA_352')
+General_Giveaway_Y2017_Y2024 |> filter(Identifier == 'CHELSEA_352') #ESM: Seems to work now, also did my double checks for some clarity
 # as an example yield two rows.
 ```
 
@@ -372,7 +375,7 @@ General_Giveaway_Y2017_Y2024 |> filter(Identifier == 'CHELSEA_352')
 # 2. Overall Giveaway Kaplan-Meier Model
 ## a) Creating the model
 Overall_Giveaway_Kaplan_Model <- 
-  ggsurvfit::survfit2(Surv(Time, Event) ~ 1, data = survival_curve_data) # tried piping but didn't work
+  ggsurvfit::survfit2(Surv(Time, Event) ~ 1, data = Yard_Survival_Curve_Data) # tried piping but didn't work
 
 ## b) Visualizing the model
 ggsurvfit::ggsurvfit(Overall_Giveaway_Kaplan_Model) +
@@ -391,7 +394,7 @@ ggsurvfit::ggsurvfit(Overall_Giveaway_Kaplan_Model) +
 # 3. City Giveaway Kaplan-Meier Model
 ## a) Creating the model
 City_Giveaway_Kaplan_Model <- 
-  ggsurvfit::survfit2(Surv(Time, Event) ~ City, data = survival_curve_data) 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ City, data = Yard_Survival_Curve_Data) 
 
 ## b) Visualizing the model
 ggsurvfit::ggsurvfit(City_Giveaway_Kaplan_Model) +
@@ -411,7 +414,7 @@ ggsurvfit::ggsurvfit(City_Giveaway_Kaplan_Model) +
 # 4. Yard Giveaway Kaplan-Meier Model
 ## a) Creating the model
 Yard_Giveaway_Kaplan_Model <- 
-  ggsurvfit::survfit2(Surv(Time, Event) ~ Yard, data = survival_curve_data) 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Yard, data = Yard_Survival_Curve_Data) 
 
 ## b) Visualizing the model
 ggsurvfit::ggsurvfit(Yard_Giveaway_Kaplan_Model) +
@@ -430,19 +433,19 @@ ggsurvfit::ggsurvfit(Yard_Giveaway_Kaplan_Model) +
 
 # 5. Analysis of strength of these models (will be small), particularly those that had a grouping
 ## a) City
-survdiff(Surv(Time, Event) ~ City, data = survival_curve_data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+survdiff(Surv(Time, Event) ~ City, data = Yard_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
 
 ## b) Yard
-survdiff(Surv(Time, Event) ~ Yard, data = survival_curve_data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
+survdiff(Surv(Time, Event) ~ Yard, data = Yard_Survival_Curve_Data) # Read the package for survival and it says survdiff "Tests if there is a difference between two or more survival curves using the  G ρ G  ρ family of tests, or for a single curve against a known alternative"—not sure what they mean, however
 
 ## c) Yard + City
-survdiff(Surv(Time, Event) ~ Yard + City, data = survival_curve_data) # Again, very low..
+survdiff(Surv(Time, Event) ~ Yard + City, data = Yard_Survival_Curve_Data) # Again, very low..
 
 # Takeaways: City has an overall low p-value; but due to the low number of citings, it might not be worth using or mentioning with caution. However, I think that completes the front yard-backyard analysis
 
 
 ## b) Visualizing the model
-survival_curve_data |> 
+Yard_Survival_Curve_Data |> 
   ggsurvfit::survfit2(Surv(Time, Event) ~ Yard + City, data = _) |> 
   ggsurvfit::ggsurvfit() +
   ggsurvfit::add_confidence_interval() +
@@ -462,7 +465,7 @@ survival_curve_data |>
   ) 
 
 
-survival_curve_data |> 
+Yard_Survival_Curve_Data |> 
   ggsurvfit::survfit2(Surv(Time, Event) ~ Yard + City, data = _) |> 
   ggsurvfit::ggsurvfit() +
   ggsurvfit::add_confidence_interval() +
@@ -487,19 +490,21 @@ survival_curve_data |>
 # 1. Building the survival-ready long dataframe
 General_Location_Survival_Curve_Data <-
   General_Giveaway_Y2017_Y2024 |>
-  transmute( #Just learned about this, cool since its like a combination of select & mutate
-    Identifier   = Identifier
-  , City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
-  , Location = General_Site_Type
-  , Time = as.numeric(Survival_Days_In_Ground)
-  , Event = Survival_Status # Calculated in the First step | Equivalent to Dexter's bin where 0 is alive and 1 is something happened
+  mutate(
+     City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
+   , Location = General_Site_Type
+   , Time = as.numeric(Survival_Days_In_Ground) # Trying to ignore the NAs
+   , Event = Survival_Status
   ) |>
-  filter(!is.na(Time) # Keeps rows where time is not missing
-        , !is.na(Event) # Makes sure that it has some sort of event status
-        , !is.na(Location) # Ensures only those that are Backyard or Front yard
-        ) |>
-  distinct() # Since they are duplicates and cna remove
-
+  filter(
+     !is.na(Time)
+   , !is.na(Event)
+   , !is.na(Location)
+  ) |>
+  tidylog::select(-starts_with("Census_")) |> 
+  tidylog::select(-starts_with("Ecological_")) |>
+  tidylog::select(-starts_with("Parcel_"))
+ 
 # 2. Overall Giveaway Kaplan-Meier Model
 ## a) Creating the model
 General_Location_Overall_Giveaway_Kaplan_Model <- 
@@ -569,19 +574,21 @@ survdiff(Surv(Time, Event) ~ Location + City, data = General_Location_Survival_C
 # 1. Building the survival-ready long dataframe
 Research_Survival_Curve_Data <-
   General_Giveaway_Y2017_Y2024 |>
-  filter(Research_Site_Type %in% c("Front Yard", "Backyard", "Side Yard", "Residential Right-of-Way")) |>
-  transmute( #Just learned about this, cool since its like a combination of select & mutate
-    Identifier   = Identifier
-  , City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
-  , Residential = fct_recode(Research_Site_Type, "Front" = "Front Yard", "Back" = "Backyard", "Side" = "Side Yard", "Right-of-way" = "Residential Right-of-Way")
-  , Time = as.numeric(Survival_Days_In_Ground)
-  , Event = Survival_Status # Calculated in the First step | Equivalent to Dexter's bin where 0 is alive and 1 is something happened
+   filter(Research_Site_Type %in% c("Front Yard", "Backyard", "Side Yard", "Residential Right-of-Way")) |>
+   mutate(
+     City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
+   , Residential = fct_recode(Research_Site_Type, "Front" = "Front Yard", "Back" = "Backyard", "Side" = "Side Yard", "Right-of-way" = "Residential Right-of-Way")
+   , Time = as.numeric(Survival_Days_In_Ground) # Trying to ignore the NAs
+   , Event = Survival_Status
   ) |>
-  filter(!is.na(Time) # Keeps rows where time is not missing
-        , !is.na(Event) # Makes sure that it has some sort of event status
-        , !is.na(Residential) # Ensures only those that were listed earlier
-        ) |>
-  distinct() # Since they are duplicates and cna remove
+  filter(
+     !is.na(Time)
+   , !is.na(Event)
+   , !is.na(Residential)
+  ) |>
+  tidylog::select(-starts_with("Census_")) |> 
+  tidylog::select(-starts_with("Ecological_")) |>
+  tidylog::select(-starts_with("Parcel_"))
 
 # 2. Overall Giveaway Kaplan-Meier Model
 ## a) Creating the model
@@ -646,12 +653,6 @@ survdiff(Surv(Time, Event) ~ City + Residential, data = Research_Survival_Curve_
 
 
 # Takeaways: Doesn't seem to have too large of a difference besides right-of-way trees which continues to highlight the greater literature; insignificance though for FY BY. interestingly, right-of-way wasn't that high too
-```
-
-```{r}
-
-
-
 ```
 
 
