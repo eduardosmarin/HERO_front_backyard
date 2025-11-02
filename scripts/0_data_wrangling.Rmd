@@ -35,7 +35,7 @@ packs <-c(
             'janitor'    # cleans things up, also pipe-friendly cross-tabulations
            , 'sf'         # for spatial data support
           , 'tidyverse'  # cuz
-          # , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'tidylog'    # prints out what was done in dplyr and tidyr
           , 'magrittr'   # for the pipe
           , 'mapview'    # web maps for zooming and panning around
           #, 'beepr'      # makes noise when things are done!
@@ -1139,8 +1139,11 @@ Final_Giveaway_Y2017_Y2024 <-
 , Census_Native_Hawaiian_Alone_Percentage 
 , Census_Other_Alone_Percentage          
 , Census_Two_or_More_Alone_Percentage     
-, Census_Hispanic_Alone_Percentage        
-, Census_Labor_Population                    
+, Census_Hispanic_Alone_Percentage   
+, Census_Poverty_Population
+, Census_Below_Poverty
+, Census_Below_Poverty_Percentage
+, Census_Labor_Population 
 , Census_Unemployed      
 , Census_Unemployed_Percentage
 , Census_Median_Age                            
@@ -1174,7 +1177,7 @@ Final_Giveaway_Y2017_Y2024 <-
   mutate(Identifier = paste0(City, "_", Unique_ID)) |>
   rename(Ecological_Native_Status = Native_Status
         , Ecological_Deciduous_Evergreen = Deciduous_Evergreen) |>
-  tidylog::select(103, 1:102)
+  tidylog::select(106, 1:105)
 
 
 Final_Giveaway_Y2017_Y2024 |>
@@ -1290,7 +1293,7 @@ Final_Giveaway_Y2017_Y2024 |>
 ```
 
 ## c) Checking Other
-```{r Double Checks for Holyoke, MA and Chelsea, MA}
+```{r Double Checks for Holyoke, MA and Chelsea, MA, eval=FALSE, include=FALSE}
 # 1. Missingness
 Final_Giveaway_Y2017_Y2024 |> 
  map(~sum(is.na(.))) |>
@@ -1344,7 +1347,7 @@ temp_Pre_V1_Giveaway_Y2017_Y2024 <-
 
 
 # 7. Archived: Census and Address Code for Geopackages 
-```{r Archived Data Wrangling eval=FALSE, include=FALSE}
+```{r echo=TRUE, Archived Data Wrangling eval=FALSE}
 #------INSERT IN CHAPTER 2. CENSUS DATA | STEP 0 ------# 
 # --- Running Notes --- #
 # For the inflation data, U.S. Bureau Labor of Statistics was used, particularly from the years 2017 and 2023 to be able to get the value needed for comparisons: https://www.bls.gov/regions/northeast/data/consumerpriceindex_boston_table.htm
@@ -1377,6 +1380,8 @@ My_Vars <-
   , 'Other_Alone'                           = 'B03002_008'
   , 'Two_or_More_Alone'                     = 'B03002_009'
   , 'Hispanic_Alone'                        = 'B03002_012'
+  , 'Poverty_Population'                    = 'B17010_001'
+  , 'Below_Poverty'                         = 'B17010_002'
   , 'Labor_Population'                      = 'B23025_003' # EM: Might need double-checking
   , 'Unemployed'                            = 'B23025_005'
   , 'Median_Age'                            = 'B01002_001'
@@ -1391,7 +1396,7 @@ My_Vars <-
   , 'ed_plus_Professional_Degree'           = 'B15003_024'
   , 'ed_plus_Doctorate_Degree'              = 'B15003_025'
   , 'Median_Gross_Rent_Adjusted_2023'       = 'B25064_001'
-  , 'Median_Home_Value_Adjusted_2023'       = 'B25077_001' #EM to DL: Not sure if we need this any more 
+  , 'Median_Home_Value_Adjusted_2023'       = 'B25077_001' 
   , 'Tenure_Population'                     = 'B25003_001'
   , 'Owner_Occupied'                        = 'B25003_002'
   , 'Renter_Occupied'                       = 'B25003_003'
@@ -1409,8 +1414,8 @@ Massachusetts_CBG_Data_Y2017 <-
     , output = 'wide'
     , moe_level = 95
     ) |>
-    tidylog::select(-tidylog::ends_with('M')) |>
-    tidylog::rename_with(~ gsub('E$', '', .x), tidylog::ends_with('E')) |>
+    tidylog::select(-dplyr::ends_with('M')) |>
+    tidylog::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
     rename(NAME = NAM) |>
     tidyr::separate( 
         NAME
@@ -1418,12 +1423,12 @@ Massachusetts_CBG_Data_Y2017 <-
       , sep  = ', '
       ) |> 
     tidylog::mutate(
-      Total_Population_Over_25 = tidylog::na_if(Total_Population_Over_25, 0)
+      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
     , Percentage_At_Least_High_School =
-        rowSums(tidylog::across(tidylog::starts_with('ed_')), na.rm = TRUE) /
+        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
         Total_Population_Over_25
     , Percentage_At_Least_College =
-        rowSums(tidylog::across(tidylog::starts_with('ed_plus')), na.rm = TRUE) /
+        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
         Total_Population_Over_25
     ) |>
     mutate(Median_Household_Income_Adjusted_2023 = Median_Household_Income_Adjusted_2023*(326.016/267.033)
@@ -1437,11 +1442,12 @@ Massachusetts_CBG_Data_Y2017 <-
          , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
          , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
          , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
+         , Below_Poverty_Percentage = (Below_Poverty/Poverty_Population)
          , Unemployed_Percentage = (Unemployed/Labor_Population)
          , Owner_Occupied_Percentage = (Owner_Occupied/Tenure_Population)
          , Renter_Occupied_Percentage = (Renter_Occupied/Tenure_Population)
          ) |>
-    tidylog::select(-tidylog::starts_with('ed_')) |>
+    tidylog::select(-dplyr::starts_with('ed_')) |>
     mutate(Year_Dataset = "2017") |>
     rename_with(~ paste0("Census_", .x)
               ,  .cols = -any_of("geometry")) |> #Making sure geometry doesn't change name
@@ -1462,8 +1468,8 @@ Massachusetts_CBG_Data_Y2023 <-
     , output = 'wide'
     , moe_level = 95
     ) |>
-    tidylog::select(-tidylog::ends_with('M')) |>
-    tidylog::rename_with(~ gsub('E$', '', .x), tidylog::ends_with('E')) |>
+    tidylog::select(-dplyr::ends_with('M')) |>
+    tidylog::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
     rename(NAME = NAM) |> 
     tidyr::separate( 
         NAME
@@ -1471,12 +1477,12 @@ Massachusetts_CBG_Data_Y2023 <-
       , sep  = '; ' # The delimiter for 2023 was for some reason different?
       ) |> 
     tidylog::mutate(
-      Total_Population_Over_25 = tidylog::na_if(Total_Population_Over_25, 0)
+      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
     , Percentage_At_Least_High_School =
-        rowSums(tidylog::across(tidylog::starts_with('ed_')), na.rm = TRUE) /
+        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
         Total_Population_Over_25
     , Percentage_At_Least_College =
-        rowSums(tidylog::across(tidylog::starts_with('ed_plus')), na.rm = TRUE) /
+        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
         Total_Population_Over_25
     ) |>
     mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
@@ -1487,11 +1493,12 @@ Massachusetts_CBG_Data_Y2023 <-
          , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
          , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
          , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
+         , Below_Poverty_Percentage = (Below_Poverty/Poverty_Population)
          , Unemployed_Percentage = (Unemployed/Labor_Population)
          , Owner_Occupied_Percentage = (Owner_Occupied/Tenure_Population)
          , Renter_Occupied_Percentage = (Renter_Occupied/Tenure_Population)
          ) |>
-    tidylog::select(-tidylog::starts_with('ed_')) |>
+    tidylog::select(-dplyr::starts_with('ed_')) |>
     mutate(Year_Dataset = "2023") |>
     rename_with(~ paste0("Census_", .x)
               ,  .cols = -any_of("geometry")) |>

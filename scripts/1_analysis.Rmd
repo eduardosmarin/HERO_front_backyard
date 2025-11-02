@@ -62,7 +62,8 @@ install.packages(setdiff(packs, rownames(installed.packages())))
 vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
 ```
 
-# 1. Analysis Prepartion 
+# 1. Analysis Prepartion
+
 ```{r}
 # 1. Reading in the final giveaway data set
 Final_Giveaway_Y2017_Y2024 <-
@@ -167,9 +168,16 @@ Chi_Fisher_Giveaway_Y2017_Y2024 <-
 ```
 
 # 2. Chi Square Tests & Fisher Tests
-- Learned this after getting some warnings from my chi squares when sample size was too small. When cell counts are lower than five, we ought to use the Fisher test. However, when cell counts are higher than five, chi squares become more ideal: https://www.ccjm.org/content/84/9_suppl_2/e20 & https://medium.com/@alb.formaggio/chi-square-and-fishers-test-does-it-really-matter-614a8cb937af
+
+-   Learned this after getting some warnings from my chi squares when
+    sample size was too small. When cell counts are lower than five, we
+    ought to use the Fisher test. However, when cell counts are higher
+    than five, chi squares become more ideal:
+    <https://www.ccjm.org/content/84/9_suppl_2/e20> &
+    [https://medium.com/\@alb.formaggio/chi-square-and-fishers-test-does-it-really-matter-614a8cb937af](https://medium.com/@alb.formaggio/chi-square-and-fishers-test-does-it-really-matter-614a8cb937af){.uri}
 
 ## a) Overall Survivorship Test
+
 ```{r}
 # 1. Creating the table for counts | Time and survivorship
 Chi_Fisher_Giveaway_Y2017_Y2024 |>
@@ -202,6 +210,7 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
 ```
 
 ## b) Front yard and Backyard
+
 ```{r}
 # 1. Create the table for counts | Yard, time, and survivorship
 Chi_Fisher_Giveaway_Y2017_Y2024 |>
@@ -248,6 +257,7 @@ T2_Yard_Fisher |> broom::tidy()
 ```
 
 ## c) City
+
 ```{r}
 # 1. Create the table for counts | City, time, and survivorship
 Chi_Fisher_Giveaway_Y2017_Y2024 |>
@@ -297,6 +307,7 @@ list(
 ```
 
 ## d) Yard and City Interaction Effects
+
 ```{r}
 # 0. Since values are so low, decided not to run a Chi Square/Fisher Test here. Instead, I will just having reporting tables
 # 1. Create the table for counts | City, time, yard, and survivorship
@@ -330,11 +341,14 @@ Chi_Fisher_Giveaway_Y2017_Y2024 |>
 # EM: Was confused if I did eight separate Chi Squares. Wanted your clarification first for that.
 ```
 
-
 # 3. Survivorship Curves
-Decided to create survivorship curves because of all of the previous effort done earlier. However, I understand there is no quantifiable significance here.
+
+Decided to create survivorship curves because of all of the previous
+effort done earlier. However, I understand there is no quantifiable
+significance here.
 
 ## a) Landscape Mullets
+
 ```{r}
 # 1. Building the survival-ready long dataframe
 Yard_Survival_Curve_Data <-
@@ -357,7 +371,6 @@ Yard_Survival_Curve_Data <-
 
 ```
 
-
 ```{r}
 # General_Giveaway_Y2017_Y2024 has the right structure. See for example 
 
@@ -366,7 +379,6 @@ General_Giveaway_Y2017_Y2024 |> tabyl(Identifier) |> tabyl(n) # they all have tw
 General_Giveaway_Y2017_Y2024 |> filter(Identifier == 'CHELSEA_352') #ESM: Seems to work now, also did my double checks for some clarity
 # as an example yield two rows.
 ```
-
 
 ```{r}
 # DHL: that's a really big loss, is that intentional? 
@@ -486,6 +498,7 @@ Yard_Survival_Curve_Data |>
 ```
 
 ## b) General Location (as in the HERO Presentation)
+
 ```{r}
 # 1. Building the survival-ready long dataframe
 General_Location_Survival_Curve_Data <-
@@ -570,6 +583,7 @@ survdiff(Surv(Time, Event) ~ Location + City, data = General_Location_Survival_C
 ```
 
 ## c) Research Site Types (Right of Way vs. Specific Site Types)
+
 ```{r}
 # 1. Building the survival-ready long dataframe
 Research_Survival_Curve_Data <-
@@ -655,14 +669,25 @@ survdiff(Surv(Time, Event) ~ City + Residential, data = Research_Survival_Curve_
 # Takeaways: Doesn't seem to have too large of a difference besides right-of-way trees which continues to highlight the greater literature; insignificance though for FY BY. interestingly, right-of-way wasn't that high too
 ```
 
+End takeways (V2): - Location does seem to matter for tree survivorship,
+more generally if it is in a residential vs non-residential space.
+However, specific locations within a residential area may not lead to—at
+least from this dataset—any significance. As you can see, even including
+right-of-way, the p-value (\<0.07) and tht there isn't ny experienced
+difference in survivorship between Front, Side, Back, and Right-of-way
 
-End takeways (V2):
-- Location does seem to matter for tree survivorship, more generally if it is in a residential vs non-residential space. However, specific locations within a residential area may not lead to—at least from this dataset—any significance. As you can see, even including right-of-way, the p-value (<0.07) and tht there isn't ny experienced difference in survivorship between Front, Side, Back, and Right-of-way
-
-End takeaways:
-- This is a bit of a yikes since the data set was overall to small, specifically for the "landscape mullets" concept to see if there was any discernible trend. I did enjoy the data analysis part but had challenges overall with grappling with what this mean (which feels like not much)
-- For following steps for thesis, I might want to step a bit more broadly. Instead of limiting the dataset to just the observations in FY BY, I can see if generally survivorship (which these curves are cool but need more fleshing out) are generally impacted by factors like property parcel value, education, etc. Maybe that could be the next thing I complete this week so I can start writing. 
-  - Currently, I belive I am unable to ask questions concerning income and landscape mullet just due to the size of the dataset.
+End takeaways: - This is a bit of a yikes since the data set was overall
+to small, specifically for the "landscape mullets" concept to see if
+there was any discernible trend. I did enjoy the data analysis part but
+had challenges overall with grappling with what this mean (which feels
+like not much) - For following steps for thesis, I might want to step a
+bit more broadly. Instead of limiting the dataset to just the
+observations in FY BY, I can see if generally survivorship (which these
+curves are cool but need more fleshing out) are generally impacted by
+factors like property parcel value, education, etc. Maybe that could be
+the next thing I complete this week so I can start writing. - Currently,
+I belive I am unable to ask questions concerning income and landscape
+mullet just due to the size of the dataset.
 
 # RESOURCES
 
@@ -686,8 +711,8 @@ https://www.danieldsjoberg.com/ggsurvfit/reference/ggsurvfit.html
 lots of logistic regressions
 ```
 
-
 # Cox proportional hazard models
+
 ```{r}
 
 
@@ -737,4 +762,3 @@ coxph_int |>
     ggeffects::ggpredict(terms = c('City', 'Residential')) |> plot()
 
 ```
-

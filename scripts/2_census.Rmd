@@ -1,0 +1,668 @@
+---
+title: "EVST 4960 Census Data"
+subtitle: "Calculating Census Data for Final Project"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  pFinal_Giveaway_Y2017_Y2024_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+# 0. Loading the packages
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Loading all packages
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'tidycensus' # tidy census package
+          , 'tidygeocoder' # geo coding
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          , 'shiny'
+          , 'leafsync'  # linked maps
+          , 'openxlsx'
+          , 'readxl'
+          )     
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+
+# 3. Items for tidy census
+census_api_key('58fc555c77c229747ade7d9fe50e7c71297cf91a', install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+options(tigris_use_cache = TRUE)
+```
+
+# 1. General (Version 1 and Version 2)
+```{r}
+# 1. Boundaries
+## a. Reading the Holyoke boundary
+Holyoke_Boundary <-
+  st_read("input_data/Holyoke/Boundaries/holyoke_boundary.gpkg") |>
+  st_transform(st_crs(4269)) # They both have the same projections so it doesn't matter
+
+## b. Reading the Chelsea boundary
+Chelsea_Boundary <-
+  st_read("input_data/Chelsea/Boundaries/chelsea_boundary.gpkg") |>
+  st_transform(st_crs(4269)) # Likewise, they both have the same projections so it shouldn't matter
+```
+
+# 2a. Reading & Transforming Census Data (Version 1) | CBG All 
+```{r}
+# 1. Reading CBGs in 2017 and 2023 in Holyoke, MA and Chelsea, MA
+Massachusetts_CBG_Data_Y2017_V1 <-
+st_read("input_data/General/Massachusetts_CBG_Data_Y2017.gpkg")
+
+Massachusetts_CBG_Data_Y2023_V1 <-
+st_read("input_data/General/Massachusetts_CBG_Data_Y2023.gpkg")
+
+# 2. Sub selecting the Holyoke, MA and Chelsea, MA specific block 
+## b. Figuring this out for Chelsea Y2017
+Chelsea_CBG_Data_Y2017_V1 <-
+  Massachusetts_CBG_Data_Y2017_V1[
+  st_intersects(Massachusetts_CBG_Data_Y2017_V1, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
+  filter(!Census_GEOID %in% c("250173424023", "250173424024", "250173426002", "250173421014",
+      "250173421013", "250251701023", "250251701013", "250251706012"
+      , "250173424004", "250251701003", "250251701006" #These three need to be added for 2017 for some reasons
+      )) |>
+  st_transform(st_crs(4269)) 
+
+## b. Figuring this out for Chelsea Y2023
+Chelsea_CBG_Data_Y2023_V1 <-
+  Massachusetts_CBG_Data_Y2023_V1[
+  st_intersects(Massachusetts_CBG_Data_Y2023_V1, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
+  filter(!Census_GEOID %in% c("250173424023", "250173424024", "250173426002", "250173421014",
+      "250173421013", "250251701023", "250251701013", "250251706012")) |> # Could also use %nin%
+  st_transform(st_crs(4269)) 
+  
+#-# Double checked both of these: they seem good above!
+## c. Figuring this out for Holyoke Y2017
+Holyoke_CBG_Data_Y2017_V1 <-
+  Massachusetts_CBG_Data_Y2017_V1[
+  st_intersects(Massachusetts_CBG_Data_Y2017_V1, Holyoke_Boundary, sparse = FALSE)[, 1],
+] |>
+  filter(!Census_GEOID %in% c(
+    "250138122021", "250138111023", "250138111022", "250138111021",
+    "250138111012", "250138111024", "250138111011", "250138113013",
+    "250158211012", "250158211014", "250158213001", "250158225004",
+    "250158211012", "250158213003", "250158223001", "250158225004",
+    "250138125004", "250158224012", "250158214004"
+    , "250138122022" #This one needed to be added for 2017 for some reasons
+  )) |>
+  st_transform(st_crs(4269))
+
+## c. Figuring this out for Holyoke Y2023
+Holyoke_CBG_Data_Y2023_V1 <-
+  Massachusetts_CBG_Data_Y2023_V1[
+  st_intersects(Massachusetts_CBG_Data_Y2023_V1, Holyoke_Boundary, sparse = FALSE)[, 1],
+] |>
+  filter(!Census_GEOID %in% c(
+    "250138122021", "250138111023", "250138111022", "250138111021",
+    "250138111012", "250138111024", "250138111011", "250138113013",
+    "250158211012", "250158211014", "250158213001", "250158225004",
+    "250158211012", "250158213003", "250158223001", "250158225004",
+    "250138125004", "250158224012", "250158214004"
+  )) |>
+  st_transform(st_crs(4269)) 
+```
+
+# 2b. Reading & Transforming Census Data (Version 2) | City All
+```{r}
+# 1. Loading the list of variables from ACS of 2017 & 2024
+## a. Listing the 2017 variable data
+Variables_ACS_Y2017 <-
+  tidycensus::load_variables('acs5', year = 2017) |>
+  filter(geography == "block group")
+
+## b. Listing the 2023 variable data
+Variables_ACS_Y2023 <-
+  tidycensus::load_variables('acs5', year = 2021) |>
+  filter(geography == "block group")
+
+# 2. Selecting the variables of ACS of 2017 & 2023
+## a. Choosing the 2017 & 2023 variables | EM: Double-checked and seems Y2017 & Y2023 are the same
+My_Vars <-
+  c('Median_Household_Income_Adjusted_2023' = 'B19013_001'
+  , 'Total_Population'                      = 'B01003_001'
+  , 'Households'                            = 'B11001_001'
+  , 'Ethnicity_Population'                  = 'B03002_001'
+  , 'White_Alone'                           = 'B03002_003'
+  , 'Black_Alone'                           = 'B03002_004'
+  , 'American_Indian_Alone'                 = 'B03002_005'
+  , 'Asian_Alone'                           = 'B03002_006'
+  , 'Native_Hawaiian_Alone'                 = 'B03002_007'
+  , 'Other_Alone'                           = 'B03002_008'
+  , 'Two_or_More_Alone'                     = 'B03002_009'
+  , 'Hispanic_Alone'                        = 'B03002_012'
+  , 'Poverty_Population'                    = 'B17010_001'
+  , 'Below_Poverty'                         = 'B17010_002'
+  , 'Labor_Population'                      = 'B23025_003' # EM: Might need double-checking
+  , 'Unemployed'                            = 'B23025_005'
+  , 'Median_Age'                            = 'B01002_001'
+  , 'Total_Population_Over_25'              = 'B15003_001'
+  , 'ed_High_School_Degree'                 = 'B15003_017'
+  , 'ed_GED_Degree'                         = 'B15003_018'
+  , 'ed_College_Less_1_Year'                = 'B15003_019'
+  , 'ed_College_More_1_Year'                = 'B15003_020'
+  , 'ed_Associate_Degree'                   = 'B15003_021'
+  , 'ed_plus_Bachelor_Degree'               = 'B15003_022'
+  , 'ed_plus_Master_Degree'                 = 'B15003_023'
+  , 'ed_plus_Professional_Degree'           = 'B15003_024'
+  , 'ed_plus_Doctorate_Degree'              = 'B15003_025'
+  , 'Median_Gross_Rent_Adjusted_2023'       = 'B25064_001'
+  , 'Median_Home_Value_Adjusted_2023'       = 'B25077_001' #EM to DL: Not sure if we need this any more 
+  , 'Tenure_Population'                     = 'B25003_001'
+  , 'Owner_Occupied'                        = 'B25003_002'
+  , 'Renter_Occupied'                       = 'B25003_003'
+      )
+
+# 3. Selecting the variables of ACS of 2017 & 2023
+## a. Downloading the Y2017 Census Data 
+Massachusetts_CBG_Data_Y2017_V2 <-
+  tidycensus::get_acs(
+      geography = 'block group'
+    , state = 'Massachusetts'
+    , variables = My_Vars           
+    , year = 2017
+    , geometry = TRUE
+    , output = 'wide'
+    , moe_level = 95
+    ) |>
+    tidylog::select(-dplyr::ends_with('M')) |>
+    tidylog::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
+    rename(NAME = NAM) |>
+    tidyr::separate( 
+        NAME
+      , into = c('Block', 'Tract', 'County', 'State')
+      , sep  = ', '
+      ) |>
+   mutate(Year_Dataset = "2017") |>
+   mutate(Median_Household_Income_Adjusted_2023 = Median_Household_Income_Adjusted_2023*(326.016/267.033)
+          , Median_Gross_Rent_Adjusted_2023 = Median_Gross_Rent_Adjusted_2023*(326.016/267.033)
+          , Median_Home_Value_Adjusted_2023 = Median_Home_Value_Adjusted_2023*(326.016/267.033))
+
+## b. Downloading the Y2023 Census Data
+Massachusetts_CBG_Data_Y2023_V2 <-
+  tidycensus::get_acs(
+      geography = 'block group'
+    , state = 'Massachusetts'
+    , variables = My_Vars           
+    , year = 2023
+    , geometry = TRUE
+    , output = 'wide'
+    , moe_level = 95
+    ) |>
+    tidylog::select(-dplyr::ends_with('M')) |>
+    tidylog::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
+    rename(NAME = NAM) |> 
+    tidyr::separate( 
+        NAME
+      , into = c('Block', 'Tract', 'County', 'State')
+      , sep  = '; ' # The delimiter for 2023 was for some reason different?
+      ) |>
+    mutate(Year_Dataset = "2023") 
+
+
+# 5. Sub selecting the Holyoke, MA and Chelsea, MA specific block 
+## b. Figuring this out for Chelsea Y2017
+Chelsea_CBG_Data_Y2017_V2 <-
+  Massachusetts_CBG_Data_Y2017_V2[
+  st_intersects(Massachusetts_CBG_Data_Y2017_V2, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
+  filter(!GEOID %in% c("250173424023", "250173424024", "250173426002", "250173421014",
+      "250173421013", "250251701023", "250251701013", "250251706012"
+      , "250173424004", "250251701003", "250251701006" #These three need to be added for 2017 for some reasons
+      )) |>
+  st_transform(st_crs(4269)) 
+
+## b. Figuring this out for Chelsea Y2023
+Chelsea_CBG_Data_Y2023_V2 <-
+  Massachusetts_CBG_Data_Y2023_V2[
+  st_intersects(Massachusetts_CBG_Data_Y2023_V2, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
+  filter(!GEOID %in% c("250173424023", "250173424024", "250173426002", "250173421014",
+      "250173421013", "250251701023", "250251701013", "250251706012")) |> # Could also use %nin%
+  st_transform(st_crs(4269)) 
+  
+#-# Double checked both of these: they seem good above!
+## c. Figuring this out for Holyoke Y2017
+Holyoke_CBG_Data_Y2017_V2 <-
+  Massachusetts_CBG_Data_Y2017_V2[
+  st_intersects(Massachusetts_CBG_Data_Y2017_V2, Holyoke_Boundary, sparse = FALSE)[, 1],
+] |>
+  filter(!GEOID %in% c(
+    "250138122021", "250138111023", "250138111022", "250138111021",
+    "250138111012", "250138111024", "250138111011", "250138113013",
+    "250158211012", "250158211014", "250158213001", "250158225004",
+    "250158211012", "250158213003", "250158223001", "250158225004",
+    "250138125004", "250158224012", "250158214004"
+    , "250138122022" #This one needed to be added for 2017 for some reasons
+  )) |>
+  st_transform(st_crs(4269))
+  
+## d. Figuring this out for Holyoke Y2023
+Holyoke_CBG_Data_Y2023_V2 <-
+  Massachusetts_CBG_Data_Y2023_V2[
+  st_intersects(Massachusetts_CBG_Data_Y2023_V2, Holyoke_Boundary, sparse = FALSE)[, 1],
+] |>
+  filter(!GEOID %in% c(
+    "250138122021", "250138111023", "250138111022", "250138111021",
+    "250138111012", "250138111024", "250138111011", "250138113013",
+    "250158211012", "250158211014", "250158213001", "250158225004",
+    "250158211012", "250158213003", "250158223001", "250158225004",
+    "250138125004", "250158224012", "250158214004"
+  )) |>
+  st_transform(st_crs(4269)) 
+```
+
+# 3. Finding the Entire City Statistics
+```{r}
+# 0. Column Orders
+Final_Order <- c("City","Census_Year","Census_Total_Population","Census_Households","Census_Ethnicity_Population",
+  "Census_White_Alone","Census_Black_Alone","Census_American_Indian_Alone",
+  "Census_Asian_Alone","Census_Native_Hawaiian_Alone","Census_Other_Alone",
+  "Census_Two_or_More_Alone","Census_Hispanic_Alone",
+  "Census_White_Alone_Percentage","Census_Black_Alone_Percentage",
+  "Census_American_Indian_Alone_Percentage","Census_Asian_Alone_Percentage",
+  "Census_Native_Hawaiian_Alone_Percentage","Census_Other_Alone_Percentage",
+  "Census_Two_or_More_Alone_Percentage","Census_Hispanic_Alone_Percentage","Census_Poverty_Population","Census_Below_Poverty","Census_Below_Poverty_Percentage",
+  "Census_Labor_Population","Census_Unemployed","Census_Unemployed_Percentage",
+  "Census_Median_Age","Census_Total_Population_Over_25",
+  "Census_Median_Gross_Rent_Adjusted_2023","Census_Median_Home_Value_Adjusted_2023",
+  "Census_Tenure_Population","Census_Owner_Occupied","Census_Renter_Occupied",
+  "Census_Owner_Occupied_Percentage","Census_Renter_Occupied_Percentage",
+  "Census_Percentage_At_Least_High_School","Census_Percentage_At_Least_College" )
+
+# 1. Creating the Statistics for Holyoke (2023)
+## a. For the weighted average
+Holyoke_CBG_Weighted_Y2023 <-
+Holyoke_CBG_Data_Y2023_V2 |>
+  st_drop_geometry()
+
+## b. Overall for Holyoke (2023)
+All_Holyoke_Data_Y2023 <-
+   Holyoke_CBG_Data_Y2023_V2 |>
+   st_drop_geometry() |>
+   summarize(
+    Total_Population                = sum(Total_Population, na.rm = TRUE)
+  , Ethnicity_Population            = sum(Ethnicity_Population, na.rm = TRUE)
+  , White_Alone                     = sum(White_Alone, na.rm = TRUE)
+  , Black_Alone                     = sum(Black_Alone, na.rm = TRUE)
+  , American_Indian_Alone           = sum(American_Indian_Alone, na.rm = TRUE)
+  , Native_Hawaiian_Alone           = sum(Native_Hawaiian_Alone, na.rm = TRUE)
+  , Other_Alone                     = sum(Other_Alone, na.rm = TRUE)
+  , Two_or_More_Alone               = sum(Two_or_More_Alone, na.rm = TRUE)
+  , Asian_Alone                     = sum(Asian_Alone, na.rm = TRUE)
+  , Hispanic_Alone                  = sum(Hispanic_Alone, na.rm = TRUE)
+  , Poverty_Population              = sum(Poverty_Population, na.rm = TRUE)                     
+  , Below_Poverty                   = sum(Below_Poverty, na.rm = TRUE) 
+  , Labor_Population                = sum(Labor_Population, na.rm = TRUE)
+  , Unemployed                      = sum(Unemployed, na.rm = TRUE)
+  , Households                      = sum(Households, na.rm = TRUE)
+  , Tenure_Population               = sum(Tenure_Population, na.rm = TRUE)
+  , Owner_Occupied                  = sum(Owner_Occupied, na.rm = TRUE)
+  , Renter_Occupied                 = sum(Renter_Occupied, na.rm = TRUE)
+  , Total_Population_Over_25        = sum(Total_Population_Over_25, na.rm = TRUE)
+  , ed_High_School_Degree           = sum(ed_High_School_Degree, na.rm = TRUE)                    
+  , ed_GED_Degree                   = sum(ed_GED_Degree, na.rm = TRUE)                          
+  , ed_College_Less_1_Year          = sum(ed_College_Less_1_Year, na.rm = TRUE)                 
+  , ed_College_More_1_Year          = sum(ed_College_More_1_Year, na.rm = TRUE)                 
+  , ed_Associate_Degree             = sum(ed_Associate_Degree, na.rm = TRUE)                    
+  , ed_plus_Bachelor_Degree         = sum(ed_plus_Bachelor_Degree, na.rm = TRUE)              
+  , ed_plus_Master_Degree           = sum(ed_plus_Master_Degree, na.rm = TRUE)                
+  , ed_plus_Professional_Degree     = sum(ed_plus_Professional_Degree, na.rm = TRUE)       
+  , ed_plus_Doctorate_Degree        = sum(ed_plus_Doctorate_Degree, na.rm = TRUE)          
+  , Year_Dataset                    = first(Year_Dataset)
+   ) |>
+  dplyr::mutate(
+      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
+    , Percentage_At_Least_High_School =
+        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
+        Total_Population_Over_25
+    , Percentage_At_Least_College =
+        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
+        Total_Population_Over_25
+    ) |>
+  dplyr::select(-dplyr::starts_with('ed_')) |>
+  mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
+         , Black_Alone_Percentage = (Black_Alone/Ethnicity_Population)
+         , American_Indian_Alone_Percentage = (American_Indian_Alone/Ethnicity_Population)
+         , Asian_Alone_Percentage = (Asian_Alone/Ethnicity_Population)
+         , Native_Hawaiian_Alone_Percentage = (Native_Hawaiian_Alone/Ethnicity_Population)
+         , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
+         , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
+         , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
+         , Below_Poverty_Percentage = (Below_Poverty/Poverty_Population)
+         , Unemployed_Percentage =      ifelse(Labor_Population > 0, Unemployed/Labor_Population       , NA_real_)
+         , Owner_Occupied_Percentage =  ifelse(Tenure_Population > 0, Owner_Occupied/Tenure_Population , NA_real_)
+         , Renter_Occupied_Percentage = ifelse(Tenure_Population > 0, Renter_Occupied/Tenure_Population, NA_real_)
+         ) |>
+  mutate( #Doing weighted means based on each respective category
+     Median_Household_Income_Adjusted_2023 =
+      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Household_Income_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2023$Households, na.rm = TRUE) 
+  , Median_Gross_Rent_Adjusted_2023 =
+      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Gross_Rent_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2023$Renter_Occupied, na.rm = TRUE),
+  , Median_Home_Value_Adjusted_2023 =
+      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Home_Value_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2023$Owner_Occupied, na.rm = TRUE)
+  , Median_Age =
+      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Age,
+                    Holyoke_CBG_Weighted_Y2023$Total_Population, na.rm = TRUE)
+         ) |>
+    rename_with(~ paste0("Census_", .x)) |>
+  mutate(Census_Year = 2023) |>
+  mutate(City = "Holyoke") |>
+  dplyr::select(Final_Order)
+
+# 2. Creating the Statistics for Holyoke (2017)
+## a. For the weighted average
+Holyoke_CBG_Weighted_Y2017 <-
+Holyoke_CBG_Data_Y2017_V2 |>
+  st_drop_geometry()
+
+## b. Overall for Holyoke
+All_Holyoke_Data_Y2017 <-
+   Holyoke_CBG_Data_Y2017_V2 |>
+   st_drop_geometry() |>
+   summarize(
+    Total_Population                = sum(Total_Population, na.rm = TRUE)
+  , Ethnicity_Population            = sum(Ethnicity_Population, na.rm = TRUE)
+  , White_Alone                     = sum(White_Alone, na.rm = TRUE)
+  , Black_Alone                     = sum(Black_Alone, na.rm = TRUE)
+  , American_Indian_Alone           = sum(American_Indian_Alone, na.rm = TRUE)
+  , Native_Hawaiian_Alone           = sum(Native_Hawaiian_Alone, na.rm = TRUE)
+  , Other_Alone                     = sum(Other_Alone, na.rm = TRUE)
+  , Two_or_More_Alone               = sum(Two_or_More_Alone, na.rm = TRUE)
+  , Asian_Alone                     = sum(Asian_Alone, na.rm = TRUE)
+  , Hispanic_Alone                  = sum(Hispanic_Alone, na.rm = TRUE)
+  , Poverty_Population              = sum(Poverty_Population, na.rm = TRUE)                     
+  , Below_Poverty                   = sum(Below_Poverty, na.rm = TRUE) 
+  , Labor_Population                = sum(Labor_Population, na.rm = TRUE)
+  , Unemployed                      = sum(Unemployed, na.rm = TRUE)
+  , Households                      = sum(Households, na.rm = TRUE)
+  , Tenure_Population               = sum(Tenure_Population, na.rm = TRUE)
+  , Owner_Occupied                  = sum(Owner_Occupied, na.rm = TRUE)
+  , Renter_Occupied                 = sum(Renter_Occupied, na.rm = TRUE)
+  , Total_Population_Over_25        = sum(Total_Population_Over_25, na.rm = TRUE)
+  , ed_High_School_Degree           = sum(ed_High_School_Degree, na.rm = TRUE)                    
+  , ed_GED_Degree                   = sum(ed_GED_Degree, na.rm = TRUE)                          
+  , ed_College_Less_1_Year          = sum(ed_College_Less_1_Year, na.rm = TRUE)                 
+  , ed_College_More_1_Year          = sum(ed_College_More_1_Year, na.rm = TRUE)                 
+  , ed_Associate_Degree             = sum(ed_Associate_Degree, na.rm = TRUE)                    
+  , ed_plus_Bachelor_Degree         = sum(ed_plus_Bachelor_Degree, na.rm = TRUE)              
+  , ed_plus_Master_Degree           = sum(ed_plus_Master_Degree, na.rm = TRUE)                
+  , ed_plus_Professional_Degree     = sum(ed_plus_Professional_Degree, na.rm = TRUE)       
+  , ed_plus_Doctorate_Degree        = sum(ed_plus_Doctorate_Degree, na.rm = TRUE)          
+  , Year_Dataset                    = first(Year_Dataset)
+   ) |>
+  dplyr::mutate(
+      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
+    , Percentage_At_Least_High_School =
+        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
+        Total_Population_Over_25
+    , Percentage_At_Least_College =
+        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
+        Total_Population_Over_25
+    ) |>
+  dplyr::select(-dplyr::starts_with('ed_')) |>
+  mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
+         , Black_Alone_Percentage = (Black_Alone/Ethnicity_Population)
+         , American_Indian_Alone_Percentage = (American_Indian_Alone/Ethnicity_Population)
+         , Asian_Alone_Percentage = (Asian_Alone/Ethnicity_Population)
+         , Native_Hawaiian_Alone_Percentage = (Native_Hawaiian_Alone/Ethnicity_Population)
+         , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
+         , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
+         , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
+         , Below_Poverty_Percentage = (Below_Poverty/Poverty_Population)
+         , Unemployed_Percentage =      ifelse(Labor_Population > 0, Unemployed/Labor_Population       , NA_real_)
+         , Owner_Occupied_Percentage =  ifelse(Tenure_Population > 0, Owner_Occupied/Tenure_Population , NA_real_)
+         , Renter_Occupied_Percentage = ifelse(Tenure_Population > 0, Renter_Occupied/Tenure_Population, NA_real_)
+         ) |>
+  mutate( #Doing weighted means based on each respective category
+     Median_Household_Income_Adjusted_2023 =
+      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Household_Income_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2023$Households, na.rm = TRUE) 
+  , Median_Gross_Rent_Adjusted_2023 =
+      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Gross_Rent_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2023$Renter_Occupied, na.rm = TRUE),
+  , Median_Home_Value_Adjusted_2023 =
+      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Home_Value_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2023$Owner_Occupied, na.rm = TRUE)
+  , Median_Age =
+      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Age,
+                    Holyoke_CBG_Weighted_Y2023$Total_Population, na.rm = TRUE)
+         ) |>
+    rename_with(~ paste0("Census_", .x)) |>
+  mutate(Census_Year = 2017) |>
+  mutate(City = "Holyoke") |>
+  dplyr::select(Final_Order)
+
+# 3. Creating the Statistics for Chelsea (2023)
+## a. For the weighted average
+Chelsea_CBG_Weighted_Y2023 <-
+Chelsea_CBG_Data_Y2023_V2 |>
+  st_drop_geometry()
+
+## b. Overall for Chelsea (2023)
+All_Chelsea_Data_Y2023 <-
+   Chelsea_CBG_Data_Y2023_V2 |>
+   st_drop_geometry() |>
+   summarize(
+    Total_Population                = sum(Total_Population, na.rm = TRUE)
+  , Ethnicity_Population            = sum(Ethnicity_Population, na.rm = TRUE)
+  , White_Alone                     = sum(White_Alone, na.rm = TRUE)
+  , Black_Alone                     = sum(Black_Alone, na.rm = TRUE)
+  , American_Indian_Alone           = sum(American_Indian_Alone, na.rm = TRUE)
+  , Native_Hawaiian_Alone           = sum(Native_Hawaiian_Alone, na.rm = TRUE)
+  , Other_Alone                     = sum(Other_Alone, na.rm = TRUE)
+  , Two_or_More_Alone               = sum(Two_or_More_Alone, na.rm = TRUE)
+  , Asian_Alone                     = sum(Asian_Alone, na.rm = TRUE)
+  , Hispanic_Alone                  = sum(Hispanic_Alone, na.rm = TRUE)
+  , Poverty_Population              = sum(Poverty_Population, na.rm = TRUE)                     
+  , Below_Poverty                   = sum(Below_Poverty, na.rm = TRUE) 
+  , Labor_Population                = sum(Labor_Population, na.rm = TRUE)
+  , Unemployed                      = sum(Unemployed, na.rm = TRUE)
+  , Households                      = sum(Households, na.rm = TRUE)
+  , Tenure_Population               = sum(Tenure_Population, na.rm = TRUE)
+  , Owner_Occupied                  = sum(Owner_Occupied, na.rm = TRUE)
+  , Renter_Occupied                 = sum(Renter_Occupied, na.rm = TRUE)
+  , Total_Population_Over_25        = sum(Total_Population_Over_25, na.rm = TRUE)
+  , ed_High_School_Degree           = sum(ed_High_School_Degree, na.rm = TRUE)                    
+  , ed_GED_Degree                   = sum(ed_GED_Degree, na.rm = TRUE)                          
+  , ed_College_Less_1_Year          = sum(ed_College_Less_1_Year, na.rm = TRUE)                 
+  , ed_College_More_1_Year          = sum(ed_College_More_1_Year, na.rm = TRUE)                 
+  , ed_Associate_Degree             = sum(ed_Associate_Degree, na.rm = TRUE)                    
+  , ed_plus_Bachelor_Degree         = sum(ed_plus_Bachelor_Degree, na.rm = TRUE)              
+  , ed_plus_Master_Degree           = sum(ed_plus_Master_Degree, na.rm = TRUE)                
+  , ed_plus_Professional_Degree     = sum(ed_plus_Professional_Degree, na.rm = TRUE)       
+  , ed_plus_Doctorate_Degree        = sum(ed_plus_Doctorate_Degree, na.rm = TRUE)          
+  , Year_Dataset                    = first(Year_Dataset)
+   ) |>
+  dplyr::mutate(
+      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
+    , Percentage_At_Least_High_School =
+        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
+        Total_Population_Over_25
+    , Percentage_At_Least_College =
+        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
+        Total_Population_Over_25
+    ) |>
+  dplyr::select(-dplyr::starts_with('ed_')) |>
+  mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
+         , Black_Alone_Percentage = (Black_Alone/Ethnicity_Population)
+         , American_Indian_Alone_Percentage = (American_Indian_Alone/Ethnicity_Population)
+         , Asian_Alone_Percentage = (Asian_Alone/Ethnicity_Population)
+         , Native_Hawaiian_Alone_Percentage = (Native_Hawaiian_Alone/Ethnicity_Population)
+         , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
+         , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
+         , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
+         , Below_Poverty_Percentage = (Below_Poverty/Poverty_Population)
+         , Unemployed_Percentage =      ifelse(Labor_Population > 0, Unemployed/Labor_Population       , NA_real_)
+         , Owner_Occupied_Percentage =  ifelse(Tenure_Population > 0, Owner_Occupied/Tenure_Population , NA_real_)
+         , Renter_Occupied_Percentage = ifelse(Tenure_Population > 0, Renter_Occupied/Tenure_Population, NA_real_)
+         ) |>
+  mutate( #Doing weighted means based on each respective category
+     Median_Household_Income_Adjusted_2023 =
+      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Household_Income_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2023$Households, na.rm = TRUE) 
+  , Median_Gross_Rent_Adjusted_2023 =
+      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Gross_Rent_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2023$Renter_Occupied, na.rm = TRUE),
+  , Median_Home_Value_Adjusted_2023 =
+      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Home_Value_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2023$Owner_Occupied, na.rm = TRUE)
+  , Median_Age =
+      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Age,
+                    Chelsea_CBG_Weighted_Y2023$Total_Population, na.rm = TRUE)
+         ) |>
+    rename_with(~ paste0("Census_", .x)) |>
+  mutate(Census_Year = 2023) |>
+  mutate(City = "Chelsea") |>
+  dplyr::select(Final_Order)
+
+# 4. Creating the Statistics for Chelsea (2017)
+## a. For the weighted average
+Chelsea_CBG_Weighted_Y2017 <-
+Chelsea_CBG_Data_Y2017_V2 |>
+  st_drop_geometry()
+
+## b. Overall for Chelsea
+All_Chelsea_Data_Y2017 <-
+   Chelsea_CBG_Data_Y2017_V2 |>
+   st_drop_geometry() |>
+   summarize(
+    Total_Population                = sum(Total_Population, na.rm = TRUE)
+  , Ethnicity_Population            = sum(Ethnicity_Population, na.rm = TRUE)
+  , White_Alone                     = sum(White_Alone, na.rm = TRUE)
+  , Black_Alone                     = sum(Black_Alone, na.rm = TRUE)
+  , American_Indian_Alone           = sum(American_Indian_Alone, na.rm = TRUE)
+  , Native_Hawaiian_Alone           = sum(Native_Hawaiian_Alone, na.rm = TRUE)
+  , Other_Alone                     = sum(Other_Alone, na.rm = TRUE)
+  , Two_or_More_Alone               = sum(Two_or_More_Alone, na.rm = TRUE)
+  , Asian_Alone                     = sum(Asian_Alone, na.rm = TRUE)
+  , Hispanic_Alone                  = sum(Hispanic_Alone, na.rm = TRUE)
+  , Poverty_Population              = sum(Poverty_Population, na.rm = TRUE)                     
+  , Below_Poverty                   = sum(Below_Poverty, na.rm = TRUE) 
+  , Labor_Population                = sum(Labor_Population, na.rm = TRUE)
+  , Unemployed                      = sum(Unemployed, na.rm = TRUE)
+  , Households                      = sum(Households, na.rm = TRUE)
+  , Tenure_Population               = sum(Tenure_Population, na.rm = TRUE)
+  , Owner_Occupied                  = sum(Owner_Occupied, na.rm = TRUE)
+  , Renter_Occupied                 = sum(Renter_Occupied, na.rm = TRUE)
+  , Total_Population_Over_25        = sum(Total_Population_Over_25, na.rm = TRUE)
+  , ed_High_School_Degree           = sum(ed_High_School_Degree, na.rm = TRUE)                    
+  , ed_GED_Degree                   = sum(ed_GED_Degree, na.rm = TRUE)                          
+  , ed_College_Less_1_Year          = sum(ed_College_Less_1_Year, na.rm = TRUE)                 
+  , ed_College_More_1_Year          = sum(ed_College_More_1_Year, na.rm = TRUE)                 
+  , ed_Associate_Degree             = sum(ed_Associate_Degree, na.rm = TRUE)                    
+  , ed_plus_Bachelor_Degree         = sum(ed_plus_Bachelor_Degree, na.rm = TRUE)              
+  , ed_plus_Master_Degree           = sum(ed_plus_Master_Degree, na.rm = TRUE)                
+  , ed_plus_Professional_Degree     = sum(ed_plus_Professional_Degree, na.rm = TRUE)       
+  , ed_plus_Doctorate_Degree        = sum(ed_plus_Doctorate_Degree, na.rm = TRUE)          
+  , Year_Dataset                    = first(Year_Dataset)
+   ) |>
+  dplyr::mutate(
+      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
+    , Percentage_At_Least_High_School =
+        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
+        Total_Population_Over_25
+    , Percentage_At_Least_College =
+        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
+        Total_Population_Over_25
+    ) |>
+  dplyr::select(-dplyr::starts_with('ed_')) |>
+  mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
+         , Black_Alone_Percentage = (Black_Alone/Ethnicity_Population)
+         , American_Indian_Alone_Percentage = (American_Indian_Alone/Ethnicity_Population)
+         , Asian_Alone_Percentage = (Asian_Alone/Ethnicity_Population)
+         , Native_Hawaiian_Alone_Percentage = (Native_Hawaiian_Alone/Ethnicity_Population)
+         , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
+         , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
+         , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
+         , Below_Poverty_Percentage = (Below_Poverty/Poverty_Population)
+         , Unemployed_Percentage =      ifelse(Labor_Population > 0, Unemployed/Labor_Population       , NA_real_)
+         , Owner_Occupied_Percentage =  ifelse(Tenure_Population > 0, Owner_Occupied/Tenure_Population , NA_real_)
+         , Renter_Occupied_Percentage = ifelse(Tenure_Population > 0, Renter_Occupied/Tenure_Population, NA_real_)
+         ) |>
+  mutate( #Doing weighted means based on each respective category
+     Median_Household_Income_Adjusted_2023 =
+      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Household_Income_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2023$Households, na.rm = TRUE) 
+  , Median_Gross_Rent_Adjusted_2023 =
+      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Gross_Rent_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2023$Renter_Occupied, na.rm = TRUE),
+  , Median_Home_Value_Adjusted_2023 =
+      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Home_Value_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2023$Owner_Occupied, na.rm = TRUE)
+  , Median_Age =
+      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Age,
+                    Chelsea_CBG_Weighted_Y2023$Total_Population, na.rm = TRUE)
+         ) |>
+    rename_with(~ paste0("Census_", .x)) |>
+  mutate(Census_Year = 2017) |>
+  mutate(City = "Chelsea") |>
+  dplyr::select(Final_Order)
+
+# 5. All Combined DF
+All_Cities_Data_Combined <-
+  dplyr::bind_rows(
+     All_Chelsea_Data_Y2017
+  ,  All_Chelsea_Data_Y2023
+  ,  All_Holyoke_Data_Y2017
+  ,  All_Holyoke_Data_Y2023
+  )
+
+All_Cities_Data_Combined |>
+  write_csv("input_data/holyoke_chelsea_general_demographic.csv")
+
+```
+
+# 4. Calculations for the Paper
+```{r}
+# 1. Finding the population change of Holyoke, MA
+  All_Cities_Data_Combined |>
+  filter(City == "Holyoke") |>
+  arrange(Census_Year) |>
+  summarise(
+    `Population Change` = diff(Census_Total_Population)
+  , `Percent Change` = (diff(Census_Total_Population) / first(Census_Total_Population)) * 100
+  )
+
+```
+
+
+
+
+
