@@ -1,0 +1,466 @@
+<?xml-stylesheet href='NBII_classic.xsl' type='text/xsl'?>
+<metadata>
+  <idinfo>
+    <citation>
+      <citeinfo>
+        <origin>Healy, Marc</origin>
+        <origin>Rogan, John</origin>
+        <origin>Roman, Lara A.</origin>
+        <origin>Nix, Sabine</origin>
+        <origin>Martin, Deborah G.</origin>
+        <origin>Geron, Nicholas</origin>
+        <pubdate>2022</pubdate>
+        <title>Holyoke and Chelsea, MA urban tree canopy cover data, 1952-2014</title>
+        <geoform>vector digital data</geoform>
+        <pubinfo>
+          <pubplace>Fort Collins, CO</pubplace>
+          <publish>Forest Service Research Data Archive</publish>
+        </pubinfo>
+        <onlink>https://doi.org/10.2737/RDS-2022-0028</onlink>
+      </citeinfo>
+    </citation>
+    <descript>
+      <abstract>These data represent tree cover for two cities (Chelsea and the urban core of Holyoke) in Massachusetts. Tree cover was manually delineated on aerial imagery from 1952, 1971, 2003 and 2014. Also included are neighborhood boundaries for both of these study locations.</abstract>
+      <purpose>Urban foresters assess urban tree canopy cover trends using remotely sensed imagery as a way to provide data for municipalities to set or maintain goals for tree canopy. However, these assessments typically do not take into account historical and socioeconomical dynamics of tree cover change over many decades. These land cover change data were collected to assess the rates and drivers of tree canopy cover change, using Holyoke and Chelsea to investigate the processes of tree cover change in post-industrial cities. Understanding historical drivers of tree canopy cover change can be used to inform multi-decadal urban tree canopy assessments and the creation of targeted, feasible urban tree canopy goals at neighborhood and city scales. These historical analyses can help urban natural resource managers to better understand how to protect and expand their cities’ urban tree canopy over time.</purpose>
+      <supplinf>For more information about these data see Healy et al. (2022).
+	  
+These data were published on 02/22/2022. Minor metadata updates were made on 04/25/2023.</supplinf>
+    </descript>
+    <timeperd>
+      <timeinfo>
+        <mdattim>
+          <sngdate>
+            <caldate>1952</caldate>
+          </sngdate>
+          <sngdate>
+            <caldate>1971</caldate>
+          </sngdate>
+          <sngdate>
+            <caldate>2003</caldate>
+          </sngdate>
+          <sngdate>
+            <caldate>2014</caldate>
+          </sngdate>
+        </mdattim>
+      </timeinfo>
+      <current>Ground condition</current>
+    </timeperd>
+    <status>
+      <progress>Complete</progress>
+      <update>As needed</update>
+    </status>
+    <spdom>
+      <bounding>
+        <westbc>-72.6394</westbc>
+        <eastbc>-71.0009</eastbc>
+        <northbc>42.4145</northbc>
+        <southbc>42.1854</southbc>
+      </bounding>
+      <descgeog>Chelsea, MA is located directly north of Boston, MA across the Mystic River and is part of Suffolk County. Chelsea is the smallest city in Massachusetts and also one of the most densely populated. Holyoke, MA is located in western Massachusetts along the banks of the Connecticut River and is part of Hampden County. Holyoke was one of the earliest planned industrial cities in the United States due to the construction of a dam and a series of canals which led to many different manufacturing companies. Only the urban core of Holyoke was included so that the study areas from both cities could be more consistent in size, land cover and fit to historical neighborhood boundaries.</descgeog>
+    </spdom>
+    <keywords>
+      <theme>
+        <themekt>ISO 19115 Topic Category</themekt>
+        <themekey>biota</themekey>
+        <themekey>environment</themekey>
+        <themekey>imageryBaseMapsEarthCover</themekey>
+        <themekey>society</themekey>
+        <themekey>structure</themekey>
+        <themekey>transportation</themekey>
+      </theme>
+      <theme>
+        <themekt>National Research &amp; Development Taxonomy</themekt>
+        <themekey>Ecology, Ecosystems, &amp; Environment</themekey>
+        <themekey>Geography</themekey>
+        <themekey>Landscape ecology</themekey>
+        <themekey>Environment and People</themekey>
+        <themekey>History</themekey>
+        <themekey>Impact of people on environment</themekey>
+        <themekey>Urban natural resources management</themekey>
+      </theme>
+      <theme>
+        <themekt>None</themekt>
+        <themekey>urban forest</themekey>
+        <themekey>urban greening</themekey>
+        <themekey>aerial photography</themekey>
+        <themekey>aerial imagery</themekey>
+        <themekey>land cover</themekey>
+        <themekey>land cover change</themekey>
+        <themekey>urban tree canopy cover</themekey>
+      </theme>
+      <place>
+        <placekt>None</placekt>
+        <placekey>Massachusetts</placekey>
+        <placekey>Holyoke</placekey>
+        <placekey>Chelsea</placekey>
+      </place>
+    </keywords>
+    <accconst>None</accconst>
+    <useconst>These data were collected using funding from the U.S. Government and can be used without additional permissions or fees. If you use these data in a publication, presentation, or other research product please use the following citation: 
+
+Healy, Marc; Rogan, John; Roman, Lara A.; Nix, Sabine; Martin, Deborah G.; Geron, Nicholas. 2022. Holyoke and Chelsea, MA urban tree canopy cover data, 1952-2014. Fort Collins, CO: Forest Service Research Data Archive. https://doi.org/10.2737/RDS-2022-0028</useconst>
+    <ptcontac>
+      <cntinfo>
+        <cntperp>
+          <cntper>Marc Healy</cntper>
+          <cntorg>The Nature Conservancy</cntorg>
+        </cntperp>
+        <cntaddr>
+          <addrtype>mailing and physical</addrtype>
+          <address>555 E North Ln #6030</address>
+          <city>Conshohocken</city>
+          <state>PA</state>
+          <postal>01610</postal>
+          <country>USA</country>
+        </cntaddr>
+        <cntvoice>please use email</cntvoice>
+        <cntemail>marc.healy@tnc.org</cntemail>
+      </cntinfo>
+    </ptcontac>
+    <datacred>This research was supported by the Garden Club of America Fellowship in Urban Forestry; the Human-Environmental Regional Observatory at Clark University; and the USDA Forest Service, Northern Research Station.
+	
+
+Author Information:
+
+Marc Healy
+The Nature Conservancy (formerly Clark University)
+https://orcid.org/0000-0003-3687-7229
+
+John Rogan
+Clark University
+
+Lara A. Roman
+USDA Forest Service, Pacific Southwest Research Station and Northern Research Station
+
+Sabine Nix
+University of Pennsylvania
+https://orcid.org/0000-0001-5633-899X
+
+Deborah G. Martin
+Clark University
+
+Nicholas Geron
+Clark University
+https://orcid.org/0000-0002-1300-0443</datacred>
+    <crossref>
+      <citeinfo>
+        <origin>Healy, Marc</origin>
+        <origin>Rogan, John</origin>
+        <origin>Roman, Lara A.</origin>
+        <origin>Nix, Sabine</origin>
+        <origin>Martin, Deborah G.</origin>
+        <origin>Geron, Nicholas</origin>
+        <pubdate>2022</pubdate>
+        <title>Historical urban tree canopy cover change in two post-industrial cities</title>
+        <geoform>journal article</geoform>
+        <serinfo>
+          <sername>Environmental Management</sername>
+          <issue>70: 16-34</issue>
+        </serinfo>
+        <onlink>https://doi.org/10.1007/s00267-022-01614-x</onlink>
+      </citeinfo>
+    </crossref>
+  </idinfo>
+  <dataqual>
+    <attracc>
+      <attraccr>see logical consistency section below</attraccr>
+    </attracc>
+    <logic>One individual delineated all polygons for the cities, which promotes internal consistency. A second interpreter also re-delineated 10% of the study area. The percent agreement between interpreters and both cities was over 93% agreement. The average difference in interpreters’ tree cover estimates across all years in Chelsea was 0.54 percentage points and 1.80 percentage points in Holyoke.</logic>
+    <complete>There are no missing data in this package. For the purposes of this study, only the urban core of Holyoke was included so that the study areas from both cities could be more consistent in size, land cover and fit to historical neighborhood boundaries.</complete>
+    <lineage>
+      <srcinfo>
+        <srccite>
+          <citeinfo>
+            <origin>USDA Agriculture Stabilization and Marketing Service</origin>
+            <pubdate>1952</pubdate>
+            <title>1952 Imagery</title>
+            <geoform>georeferenced and mosaicked aerial photographs</geoform>
+            <pubinfo>
+              <publish>USDA Agriculture Stabilization and Marketing Service</publish>
+            </pubinfo>
+          </citeinfo>
+        </srccite>
+        <srctime>
+          <timeinfo>
+            <mdattim>
+              <sngdate>
+                <caldate>1952</caldate>
+              </sngdate>
+            </mdattim>
+          </timeinfo>
+          <srccurr>Publication Date</srccurr>
+        </srctime>
+        <typesrc>Hard copy</typesrc>
+        <srccontr>Hard copy aerial photographs from 1952 were sourced from the Clark University Map Library and scanned for use.</srccontr>
+      </srcinfo>
+      <srcinfo>
+        <srccite>
+          <citeinfo>
+            <origin>USDA Farm Service Agency</origin>
+            <pubdate>1971</pubdate>
+            <title>1971 Imagery</title>
+            <geoform>georeferenced and mosaicked aerial photographs</geoform>
+            <pubinfo>
+              <publish>USDA Farm Service Agency</publish>
+            </pubinfo>
+          </citeinfo>
+        </srccite>
+        <srctime>
+          <timeinfo>
+            <mdattim>
+              <sngdate>
+                <caldate>1971</caldate>
+              </sngdate>
+            </mdattim>
+          </timeinfo>
+          <srccurr>Publication Date</srccurr>
+        </srctime>
+        <typesrc>Hard copy</typesrc>
+        <srccontr>The 1971 aerial photographs were acquired from the USDA Aerial Photography Field Office in Salt Lake City, UT where they were scanned and digital copies of the photos were sent to the authors.</srccontr>
+      </srcinfo>
+      <srcinfo>
+        <srccite>
+          <citeinfo>
+            <origin>USDA National Agriculture Imagery Program</origin>
+            <pubdate>Unknown</pubdate>
+            <title>USDA National Agriculture Imagery</title>
+            <geoform>aerial imagery</geoform>
+            <pubinfo>
+              <publish>USDA Geospatial Data Gateway</publish>
+            </pubinfo>
+            <onlink>https://datagateway.nrcs.usda.gov/GDGHome_DirectDownLoad.aspx</onlink>
+          </citeinfo>
+        </srccite>
+        <srctime>
+          <timeinfo>
+            <mdattim>
+              <sngdate>
+                <caldate>2003</caldate>
+              </sngdate>
+              <sngdate>
+                <caldate>2014</caldate>
+              </sngdate>
+            </mdattim>
+          </timeinfo>
+          <srccurr>Publication Date</srccurr>
+        </srctime>
+        <srccitea>USDA NAIP</srccitea>
+        <typesrc>Online</typesrc>
+        <srccontr>The NAIP imagery program acquires aerial imagery during the agricultural growing seasons in the United States, and covers the entire lower 48 states. NAIP imagery covering the study areas for years 2003 and 2014 were downloaded from the NAIP Geospatial Data Gateway. This website is a public repository for NAIP imagery and is searchable by year. Current availability is 2003-2021, but depends on the state, as each state is not imaged every year.</srccontr>
+      </srcinfo>
+      <srcinfo>
+        <srccite>
+          <citeinfo>
+            <origin>U.S. Geological Survey</origin>
+            <pubdate>Unknown</pubdate>
+            <title>MassGIS Data: 2013/2014 Aerial Imagery of Urban Areas in Massachusetts</title>
+            <geoform>aerial imagery</geoform>
+            <pubinfo>
+              <pubplace>Massachusetts</pubplace>
+              <publish>Mass.gov</publish>
+            </pubinfo>
+            <onlink>https://www.mass.gov/info-details/massgis-data-20132014-aerial-imagery</onlink>
+          </citeinfo>
+        </srccite>
+        <srctime>
+          <timeinfo>
+            <mdattim>
+              <sngdate>
+                <caldate>2013</caldate>
+              </sngdate>
+              <sngdate>
+                <caldate>2014</caldate>
+              </sngdate>
+            </mdattim>
+          </timeinfo>
+          <srccurr>Publication Date</srccurr>
+        </srctime>
+        <srccitea>USGS imagery</srccitea>
+        <typesrc>Online</typesrc>
+        <srccontr>In spring 2013 and 2014, the U.S. Geological Survey acquired imagery covering three urban areas in Massachusetts— Boston, Worcester and Springfield metropolitan areas. This imagery was downloaded in tiles from MassGIS and used to georeference the aerial imagery from 1952 and 1971.</srccontr>
+      </srcinfo>
+      <procstep>
+        <srcused>USGS imagery; NAIP</srcused>
+        <procdesc>Aerial photos from years 1952 and 1971 were digitally cropped to remove registration marks and edge distortion. Next, they were georeferenced using USGS imagery from 2014 with 30 centimeter (cm) resolution. This USGS imagery was selected because of its higher resolution than the NAIP imagery (1 meter [m]) used in this project, and because it shares the same projection as the NAIP imagery: NAD83/UTM Zone 18N (for western Massachusetts) or 19N (for eastern Massachusetts). Second or third order polynomial transformations were applied to the images based on levels of alignment and distortion which led to an average RMSE of 2.97 m. 
+		
+We defined a set of six rules for manual delineation of tree cover. These rules helped ensure consistency between interpreters and across cities and years. For each city, tree cover was delineated first on the oldest imagery, then moving forward in time, allowing older imagery to assist in the interpretation of newer imagery. We included both tree and shrub cover in tree cover delineation due to the impracticality of distinguishing trees and shrubs in two-dimensional images.
+
+1. Tree canopy polygon area must be greater than or equal to 7 square meter (m²). Polygons smaller than this can be removed post delineation. 
+
+2. Remove treeless gaps within a canopy cover polygon if groundcover is identifiable and the gaps are not dominated by shadow, e.g., open space in a forested patch. 
+
+3. Use shadow to aid in discernment of tree canopy versus shrub (i.e., a juvenile tree would produce a visible, angled shadow denoting its height, while low-to-ground shrubs would not have this trait). 
+
+4. Use visual obstruction of objects (i.e., sidewalks, rooflines, roads) by tree cover to aid in identification. 
+
+5. Edges of delineated tree canopy that extend beyond the study area boundary should be clipped to said boundary post delineation. 
+
+6. A variable viewing scale of 1:400 to 1:1000 was used across all imagery during delineation. 
+
+
+For more information see Healy et al. (2022).
+
+
+Healy, Marc; Rogan, John; Roman, Lara A.; Nix, Sabine; Martin, Deborah G.; Geron, Nicholas. 2022. Historical urban tree canopy cover change in two post-industrial cities. Environmental Management. 70: 16-34. https://doi.org/10.1007/s00267-022-01614-x</procdesc>
+        <procdate>2021</procdate>
+      </procstep>
+    </lineage>
+  </dataqual>
+  <spdoinfo>
+    <direct>Vector</direct>
+    <ptvctinf>
+      <sdtsterm>
+        <sdtstype>GT-polygon composed of chains</sdtstype>
+      </sdtsterm>
+    </ptvctinf>
+  </spdoinfo>
+  <spref>
+    <horizsys>
+      <planar>
+        <mapproj>
+          <mapprojn>NAD 1983 UTM Zone 19N</mapprojn>
+          <transmer>
+            <sfctrmer>0.9996</sfctrmer>
+            <longcm>-69.0</longcm>
+            <latprjo>0.0</latprjo>
+            <feast>500000.0</feast>
+            <fnorth>0.0</fnorth>
+          </transmer>
+        </mapproj>
+        <planci>
+          <plance>coordinate pair</plance>
+          <coordrep>
+            <absres>0.000000002220024164500956</absres>
+            <ordres>0.000000002220024164500956</ordres>
+          </coordrep>
+          <plandu>meter</plandu>
+        </planci>
+      </planar>
+      <geodetic>
+        <horizdn>D North American 1983</horizdn>
+        <ellips>GRS 1980</ellips>
+        <semiaxis>6378137.0</semiaxis>
+        <denflat>298.257222101</denflat>
+      </geodetic>
+    </horizsys>
+  </spref>
+  <eainfo>
+    <overview>
+      <eaover>Below you will find a list and description of the files included in this data publication. Data are provided as individual Esri ArcGIS shapefiles (SHP) (associated files also included), and then all of the data for each location (Chelsea and Holyoke) are combined and provided as a single OGC Geopackage (GPKG). 
+
+Tree canopy cover data include:
+FID = unique polygon indicator
+Shape = indicator that the shape is a polygon
+Area_SqM = area of the tree cover polygon in square meters 
+
+Neighborhood data include:
+FID = unique polygon indicator
+Shape = indicator that the shape is a polygon
+Neighbrhd or Name = name of each neighborhood
+AreaSqM = area of the neighborhood polygon in square meters
+
+
+DATA FILES (12)
+
+1. \Data\Chelsea_MA\All_spatial_data_Chelsea.gpkg: GPKG containing data from all Chelsea spatial data files (*.shp) included in this publication.
+2. \Data\Chelsea_MA\1952_Chelsea_TCC.shp: SHP file (and associated files) containing tree canopy cover in Chelsea in 1952.
+3. \Data\Chelsea_MA\1971_Chelsea_TCC.shp: SHP file (and associated files) containing tree canopy cover in Chelsea in 1971.
+4. \Data\Chelsea_MA\2003_Chelsea_TCC.shp: SHP file (and associated files) containing tree canopy cover in Chelsea in 2003.
+5. \Data\Chelsea_MA\2014_Chelsea_TCC.shp: SHP file (and associated files) containing tree canopy cover in Chelsea in 2014.
+6. \Data\Chelsea_MA\Chelsea_Neigborhoods.shp: SHP file (and associated files) containing the neighborhood boundaries for Chelsea, MA.
+
+7. \Data\Holyoke_MA\All_spatial_data_Holyoke.gpkg: GPKG containing data from all Holyoke spatial data files (*.shp) included in this publication.
+8. \Data\Holyoke_MA\1952_Holyoke_TCC.shp: SHP file (and associated files) containing tree canopy cover in Chelsea in 1952.
+9. \Data\Holyoke_MA\1971_Holyoke_TCC.shp: SHP file (and associated files) containing tree canopy cover in Chelsea in 1971.
+10. \Data\Holyoke_MA\2003_Holyoke_TCC.shp: SHP file (and associated files) containing tree canopy cover in Chelsea in 2003.
+11. \Data\Holyoke_MA\2014_Holyoke_TCC.shp: SHP file (and associated files) containing tree canopy cover in Chelsea in 2014.
+12. \Data\Holyoke_MA\HolyokeSA_Neigborhoods.shp: SHP file (and associated files) containing the neighborhood boundaries for study area in Holyoke, MA.
+</eaover>
+      <eadetcit>Healy, Marc; Rogan, John; Roman, Lara A.; Nix, Sabine; Martin, Deborah G.; Geron, Nicholas. 2022. Historical urban tree canopy cover change in two post-industrial cities. Environmental Management. 70: 16-34. https://doi.org/10.1007/s00267-022-01614-x</eadetcit>
+    </overview>
+  </eainfo>
+  <distinfo>
+    <distrib>
+      <cntinfo>
+        <cntorgp>
+          <cntorg>USDA Forest Service, Research and Development</cntorg>
+        </cntorgp>
+        <cntaddr>
+          <addrtype>mailing and physical</addrtype>
+          <address>240 West Prospect Road</address>
+          <city>Fort Collins</city>
+          <state>CO</state>
+          <postal>80526</postal>
+          <country>USA</country>
+        </cntaddr>
+        <cntvoice>see Contact Instructions</cntvoice>
+        <cntpos>Research Data Archivist</cntpos>
+        <cntinst>This contact information was current as of April 2023. For current information see Contact Us page on: https://doi.org/10.2737/RDS.</cntinst>
+      </cntinfo>
+    </distrib>
+    <resdesc>RDS-2022-0028</resdesc>
+    <distliab>Metadata documents have been reviewed for accuracy and completeness. Unless otherwise stated, all data and related materials are considered to satisfy the quality standards relative to the purpose for which the data were collected. However, neither the author, the Archive, nor any part of the federal government can assure the reliability or suitability of these data for a particular purpose. The act of distribution shall not constitute any such warranty, and no responsibility is assumed for a user's application of these data or related materials.
+
+The metadata, data, or related materials may be updated without notification. If a user believes errors are present in the metadata, data or related materials, please use the information in (1) Identification Information: Point of Contact, (2) Metadata Reference: Metadata Contact, or (3) Distribution Information: Distributor to notify the author or the Archive of the issues.</distliab>
+    <stdorder>
+      <digform>
+        <digtinfo>
+          <formname>SHP</formname>
+          <formvern>see Format Specification</formvern>
+          <formspec>Shapefile</formspec>
+          <filedec>Files zipped with 7-Zip 19.0</filedec>
+        </digtinfo>
+        <digtopt>
+          <onlinopt>
+            <computer>
+              <networka>
+                <networkr>https://doi.org/10.2737/RDS-2022-0028</networkr>
+              </networka>
+            </computer>
+          </onlinopt>
+        </digtopt>
+      </digform>
+      <digform>
+        <digtinfo>
+          <formname>GPKG</formname>
+          <formvern>see Format Specification</formvern>
+          <formspec>OGC GeoPackage 1.3</formspec>
+          <filedec>Files zipped with 7-Zip 19.0</filedec>
+        </digtinfo>
+        <digtopt>
+          <onlinopt>
+            <computer>
+              <networka>
+                <networkr>https://doi.org/10.2737/RDS-2022-0028</networkr>
+              </networka>
+            </computer>
+          </onlinopt>
+        </digtopt>
+      </digform>
+      <fees>None</fees>
+    </stdorder>
+  </distinfo>
+  <metainfo>
+    <metd>20230425</metd>
+    <metc>
+      <cntinfo>
+        <cntperp>
+          <cntper>Marc Healy</cntper>
+          <cntorg>The Nature Conservancy</cntorg>
+        </cntperp>
+        <cntaddr>
+          <addrtype>mailing and physical</addrtype>
+          <address>555 E North Ln #6030</address>
+          <city>Conshohocken</city>
+          <state>PA</state>
+          <postal>19428</postal>
+          <country>USA</country>
+        </cntaddr>
+        <cntvoice>please use email</cntvoice>
+        <cntemail>marc.healy@tnc.org</cntemail>
+      </cntinfo>
+    </metc>
+    <metstdn>FGDC Content Standard for Digital Geospatial Metadata</metstdn>
+    <metstdv>FGDC-STD-001-1998</metstdv>
+  </metainfo>
+</metadata>

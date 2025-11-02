@@ -297,7 +297,7 @@ Final_Order <- c("City","Census_Year","Census_Total_Population","Census_Househol
   "Census_Native_Hawaiian_Alone_Percentage","Census_Other_Alone_Percentage",
   "Census_Two_or_More_Alone_Percentage","Census_Hispanic_Alone_Percentage","Census_Poverty_Population","Census_Below_Poverty","Census_Below_Poverty_Percentage",
   "Census_Labor_Population","Census_Unemployed","Census_Unemployed_Percentage",
-  "Census_Median_Age","Census_Total_Population_Over_25",
+  "Census_Median_Age","Census_Total_Population_Over_25", "Census_Median_Household_Income_Adjusted_2023",
   "Census_Median_Gross_Rent_Adjusted_2023","Census_Median_Home_Value_Adjusted_2023",
   "Census_Tenure_Population","Census_Owner_Occupied","Census_Renter_Occupied",
   "Census_Owner_Occupied_Percentage","Census_Renter_Occupied_Percentage",
@@ -452,17 +452,17 @@ All_Holyoke_Data_Y2017 <-
          ) |>
   mutate( #Doing weighted means based on each respective category
      Median_Household_Income_Adjusted_2023 =
-      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Household_Income_Adjusted_2023,
-                    Holyoke_CBG_Weighted_Y2023$Households, na.rm = TRUE) 
+      weighted.mean(Holyoke_CBG_Weighted_Y2017$Median_Household_Income_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2017$Households, na.rm = TRUE) 
   , Median_Gross_Rent_Adjusted_2023 =
-      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Gross_Rent_Adjusted_2023,
-                    Holyoke_CBG_Weighted_Y2023$Renter_Occupied, na.rm = TRUE),
+      weighted.mean(Holyoke_CBG_Weighted_Y2017$Median_Gross_Rent_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2017$Renter_Occupied, na.rm = TRUE),
   , Median_Home_Value_Adjusted_2023 =
-      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Home_Value_Adjusted_2023,
-                    Holyoke_CBG_Weighted_Y2023$Owner_Occupied, na.rm = TRUE)
+      weighted.mean(Holyoke_CBG_Weighted_Y2017$Median_Home_Value_Adjusted_2023,
+                    Holyoke_CBG_Weighted_Y2017$Owner_Occupied, na.rm = TRUE)
   , Median_Age =
-      weighted.mean(Holyoke_CBG_Weighted_Y2023$Median_Age,
-                    Holyoke_CBG_Weighted_Y2023$Total_Population, na.rm = TRUE)
+      weighted.mean(Holyoke_CBG_Weighted_Y2017$Median_Age,
+                    Holyoke_CBG_Weighted_Y2017$Total_Population, na.rm = TRUE)
          ) |>
     rename_with(~ paste0("Census_", .x)) |>
   mutate(Census_Year = 2017) |>
@@ -618,17 +618,17 @@ All_Chelsea_Data_Y2017 <-
          ) |>
   mutate( #Doing weighted means based on each respective category
      Median_Household_Income_Adjusted_2023 =
-      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Household_Income_Adjusted_2023,
-                    Chelsea_CBG_Weighted_Y2023$Households, na.rm = TRUE) 
+      weighted.mean(Chelsea_CBG_Weighted_Y2017$Median_Household_Income_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2017$Households, na.rm = TRUE) 
   , Median_Gross_Rent_Adjusted_2023 =
-      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Gross_Rent_Adjusted_2023,
-                    Chelsea_CBG_Weighted_Y2023$Renter_Occupied, na.rm = TRUE),
+      weighted.mean(Chelsea_CBG_Weighted_Y2017$Median_Gross_Rent_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2017$Renter_Occupied, na.rm = TRUE),
   , Median_Home_Value_Adjusted_2023 =
-      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Home_Value_Adjusted_2023,
-                    Chelsea_CBG_Weighted_Y2023$Owner_Occupied, na.rm = TRUE)
+      weighted.mean(Chelsea_CBG_Weighted_Y2017$Median_Home_Value_Adjusted_2023,
+                    Chelsea_CBG_Weighted_Y2017$Owner_Occupied, na.rm = TRUE)
   , Median_Age =
-      weighted.mean(Chelsea_CBG_Weighted_Y2023$Median_Age,
-                    Chelsea_CBG_Weighted_Y2023$Total_Population, na.rm = TRUE)
+      weighted.mean(Chelsea_CBG_Weighted_Y2017$Median_Age,
+                    Chelsea_CBG_Weighted_Y2017$Total_Population, na.rm = TRUE)
          ) |>
     rename_with(~ paste0("Census_", .x)) |>
   mutate(Census_Year = 2017) |>
@@ -660,6 +660,14 @@ All_Cities_Data_Combined |>
   , `Percent Change` = (diff(Census_Total_Population) / first(Census_Total_Population)) * 100
   )
 
+# 3. Finding the population change of Holyoke, MA
+  All_Cities_Data_Combined |>
+  filter(City == "Chelsea") |>
+  arrange(Census_Year) |>
+  summarise(
+    `Population Change` = diff(Census_Total_Population)
+  , `Percent Change` = (diff(Census_Total_Population) / first(Census_Total_Population)) * 100
+  )
 ```
 
 

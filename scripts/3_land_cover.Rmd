@@ -1,0 +1,140 @@
+---
+title: "EVST 4960 Land Cover Data"
+subtitle: "Calculating Land Cover data for Final Project"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  pFinal_Giveaway_Y2017_Y2024_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+# 0. Loading the packages
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Loading all packages
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'tidycensus' # tidy census package
+          , 'tidygeocoder' # geo coding
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          , 'shiny'
+          , 'leafsync'  # linked maps
+          , 'openxlsx'
+          , 'readxl'
+          )     
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+
+# 3. Items for tidy census
+census_api_key('58fc555c77c229747ade7d9fe50e7c71297cf91a', install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+options(tigris_use_cache = TRUE)
+```
+
+# 1. Reading in the Landcover data from John Rogan and Lara Roman
+```{r}
+# 1. Figuring out the layers wtihin this geopackage
+st_layers("input_data/General/RDS-2022-0028/Data/Chelsea_MA/All_spatial_data_Chelsea.gpkg")
+
+st_layers("input_data/General/RDS-2022-0028/Data/Holyoke_MA/All_spatial_data_Holyoke.gpkg")
+
+# 2. Reading in the Chelsea & Holyoke Boundaries
+## ai. Reading the Holyoke boundary (V1)
+Holyoke_Boundary_V1 <-
+  st_read("input_data/Holyoke/Boundaries/holyoke_boundary.gpkg") |>
+  st_transform(26986)
+
+## aii. Reading the Holyoke boundary (V2)
+Holyoke_Boundary_V2 <-
+  st_read("input_data/General/RDS-2022-0028/Data/Holyoke_MA/All_spatial_data_Holyoke.gpkg"
+         , layer = "HolyokeSA_Neighborhoods") |>
+  st_union() |>
+  st_transform(26986) 
+
+## b. Reading the Chelsea boundary
+Chelsea_Boundary <-
+  st_read("input_data/Chelsea/Boundaries/chelsea_boundary.gpkg") |>
+  st_transform(26986)
+
+# 3. Reading the Canopy Layers for Holyoke & Chelsea
+Holyoke_TCC_2014 <- 
+  st_read("input_data/General/RDS-2022-0028/Data/Holyoke_MA/All_spatial_data_Holyoke.gpkg"
+         , layer = "T2014_Holyoke_TCC") |>
+  st_transform(26986) 
+  
+Chelsea_TCC_2014 <- 
+  st_read("input_data/General/RDS-2022-0028/Data/Chelsea_MA/All_spatial_data_Chelsea.gpkg"
+          , layer = "T2014_Chelsea_TCC") |>
+  st_transform(26986) 
+
+# 4. Calculating the areas for each city 
+## Holyoke
+Holyoke_V1_Area_M2  <- 
+  as.numeric(st_area(Holyoke_Boundary_V1))
+
+Holyoke_V1_Area_M2 * 3.861e-7 # In square miles
+
+Holyoke_V2_Area_M2  <- 
+  as.numeric(st_area(Holyoke_Boundary_V2))
+
+Holyoke_V2_Arxea_M2 * 3.861e-7 # In square miles
+
+## Chelsea
+Chelsea_Area_M2  <- 
+  as.numeric(st_area(Chelsea_Boundary))
+
+Chelsea_Area_M2 * 3.861e-7 # In square miles
+
+# 5. Urban canopy now! :)
+## a) Calculating the area in each
+Holyoke_TTC_M2  <- as.numeric(sum(st_area(Holyoke_TCC_2014)))
+
+Holyoke_TTC_M2 * 3.861e-7 # In square miels
+
+Chelsea_TTC_M2  <- as.numeric(sum(st_area(Chelsea_TCC_2014)))
+
+Chelsea_TTC_M2 * 3.861e-7
+
+## b) Proportion for each
+(Holyoke_TCC_Percentage  <- 100 * Holyoke_TTC_M2 / Holyoke_V2_Area_M2)
+
+(Chelsea_TCC_Percentage  <- 100 * Chelsea_TTC_M2 / Chelsea_Area_M2)
+
+```
+
+
+
