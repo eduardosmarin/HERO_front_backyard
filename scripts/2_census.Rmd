@@ -636,6 +636,7 @@ All_Chelsea_Data_Y2017 <-
   dplyr::select(Final_Order)
 
 # 5. All Combined DF
+# Kind of a vauge name :-)
 All_Cities_Data_Combined <-
   dplyr::bind_rows(
      All_Chelsea_Data_Y2017
@@ -644,13 +645,19 @@ All_Cities_Data_Combined <-
   ,  All_Holyoke_Data_Y2023
   )
 
-All_Cities_Data_Combined |>
-  write_csv("input_data/holyoke_chelsea_general_demographic.csv")
+# IMPORTANT: need to turn this off otherwise each time you run it, a new version will be saved out. This whole chunk should be turned off. Also consider 
+# write_csv(paste0("input_data/holyoke_chelsea_general_demographic_", Sys.Date(), ".csv")) to dissambiguate files in the future.
+# All_Cities_Data_Combined |>
+#   write_csv("input_data/holyoke_chelsea_general_demographic.csv")
 
 ```
 
 # 4. Calculations for the Paper
 ```{r}
+
+All_Cities_Data_Combined <- 
+  read_csv("input_data/holyoke_chelsea_general_demographic.csv")
+
 # 1. Finding the population change of Holyoke, MA
   All_Cities_Data_Combined |>
   filter(City == "Holyoke") |>
@@ -668,6 +675,14 @@ All_Cities_Data_Combined |>
     `Population Change` = diff(Census_Total_Population)
   , `Percent Change` = (diff(Census_Total_Population) / first(Census_Total_Population)) * 100
   )
+  
+# BRILIANT above. Here's what I would have done, or something like that.
+All_Cities_Data_Combined |> 
+  group_by(City, Census_Year) |> 
+  summarise(Population = sum(Census_Total_Population)) |> 
+  pivot_wider(id_cols = City, names_from = Census_Year, values_from = Population) |> 
+  mutate(change = `2017` - `2023`) # or make as percentage
+
 ```
 
 

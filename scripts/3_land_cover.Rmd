@@ -76,14 +76,14 @@ st_layers("input_data/General/RDS-2022-0028/Data/Holyoke_MA/All_spatial_data_Hol
 ## ai. Reading the Holyoke boundary (V1)
 Holyoke_Boundary_V1 <-
   st_read("input_data/Holyoke/Boundaries/holyoke_boundary.gpkg") |>
-  st_transform(26986)
+  st_transform(26986) # this is ok
 
 ## aii. Reading the Holyoke boundary (V2)
 Holyoke_Boundary_V2 <-
   st_read("input_data/General/RDS-2022-0028/Data/Holyoke_MA/All_spatial_data_Holyoke.gpkg"
          , layer = "HolyokeSA_Neighborhoods") |>
   st_union() |>
-  st_transform(26986) 
+  st_transform(26986) # it would be better style, I (DHL) think, to put st_transform(st_crs(Holyoke_Boundary_V1)) instead. DONT make this change throughout, just something for your next project. If you need to change a projection, all other steps would match and auto-magically update.
 
 ## b. Reading the Chelsea boundary
 Chelsea_Boundary <-
@@ -111,7 +111,7 @@ Holyoke_V1_Area_M2 * 3.861e-7 # In square miles
 Holyoke_V2_Area_M2  <- 
   as.numeric(st_area(Holyoke_Boundary_V2))
 
-Holyoke_V2_Arxea_M2 * 3.861e-7 # In square miles
+Holyoke_V2_Area_M2 * 3.861e-7 # In square miles
 
 ## Chelsea
 Chelsea_Area_M2  <- 

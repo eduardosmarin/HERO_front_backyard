@@ -120,7 +120,7 @@ Chelsea_Property_Data_Append_Y2019 <-
 Chelsea_Property_Data_Y2019 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Chelsea_CY19_FY19/M057TaxPar_CY19_FY19.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
-  tidylog::select(4, 13) |>
+  tidylog::select(4, 13) |> # NAMES not numbers in the future here and elsewhere. A little dangerous. No need to change, but in the next project it owuld be safer and more stable to use names
   left_join(Chelsea_Property_Data_Append_Y2019, by = "Parcel_Location_ID")  |>
   st_transform(crs = 26986)
 
