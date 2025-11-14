@@ -66,7 +66,7 @@ vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE,
 ```{r}
 # 1. Reading in the final giveaway data set
 Final_Giveaway_Y2017_Y2024 <-
-  st_read("input_data/Final_Giveaway_Y2017_Y2024_2025-11-12.gpkg") |>
+  st_read("input_data/Final_Giveaway_Y2017_Y2024_2025-11-14.gpkg") |>
   st_drop_geometry()
 
 # 2. Developing the code used for the General Survivorship Curves, which can be partitioned later based on other factors
@@ -500,6 +500,11 @@ Overall_Survival_Curve_Data <-
    , !is.na(Event)
   )
 
+# double check
+Overall_Survival_Curve_Data |> 
+  select(Unique_ID : Time_Period, Time, Event, Survival_Days_In_Ground) |> 
+  glimpse() # ERROR FIXME: time is not correctly coded
+
 # 2. Preparing the Residential Survival Dataset
 Residential_Survival_Curve_Data <-
   General_Giveaway_Y2017_Y2024 |>
@@ -523,6 +528,7 @@ Residential_Survival_Curve_Data <-
 
 ### ii) Cross tabs
 ESM to DHL: I do not have to do time periods for the cross tabs, right? This is since time is represneted as continuous and does not to be considered
+[you do want time as in year like planted or year survyed in there for some of these. If you already have two variables, then consider filtering to only look at one of the years at a time]
 
 ```{r}
 # 1. Cross tabs for Public-Private by City
@@ -681,6 +687,20 @@ ggsurvfit::ggsurvfit(Overall_STG_City_KM_Model) +
    , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
   )
 
+# another view.
+ggsurvfit::ggsurvfit(Overall_STG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  facet_wrap(~strata, nrow = 3) + # for faceting
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Site Type (General) and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+
 ## c) Testing the strength of the model
 survdiff(Surv(Time, Event) ~ Site_Type_General + City, data = Overall_Survival_Curve_Data)
 # P-value: <2e-16 | Significant: Yes
@@ -705,7 +725,7 @@ ggsurvfit::ggsurvfit(Residential_Yard_KM_Model) +
    , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
   )
 
-# ESM to DHL: Confidence intervals seem to be very large in the visualization here. What should we do?
+# ESM to DHL: Confidence intervals seem to be very large in the visualization here. What should we do? [time is not coded correctly]
 
 ## c) Testing the strength of the model
 survdiff(Surv(Time, Event) ~ Yard, data = Residential_Survival_Curve_Data)
@@ -728,17 +748,29 @@ ggsurvfit::ggsurvfit(Residential_Yard_City_KM_Model) +
    , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
   )
 
+ggsurvfit::ggsurvfit(Residential_Yard_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  facet_wrap(~strata, nrow = 3) + # for faceting
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Yard and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
 ## c) Testing the strength of the model
 survdiff(Surv(Time, Event) ~ Yard + City, data = Residential_Survival_Curve_Data)
 # P-value: <2e-16 | Significant: Yes
 
-# ESM to DHL: Seems that the significance levels being low is primarily due to the addition of the city variable
+# ESM to DHL: Seems that the significance levels being low is primarily due to the addition of the city variable [good observation but I wouldn't put too much weight into these since time is not coded correctly]
 ```
 
 ## b) Ecological
 ### i) Cross tabs
 
-ESM to DHL: Should this be of Overall or Residential-specific? Second, is this based off of the variable looked at alone or in context with yard?
+ESM to DHL: Should this be of Overall or Residential-specific? [look at both and decide later if you want to report both] Second, is this based off of the variable looked at alone or in context with yard? [huh?]
 
 ```{r}
 # 1. Cross tabs for Broadleaf and Conifer by City 
@@ -849,6 +881,10 @@ Residential_Survival_Curve_Data |>
 
 # 9. Cross tabs for Height Maturity by City
 ## ESM to DHL: Should I create size classes for these to be categorical?
+Residential_Survival_Curve_Data$Ecological_Height_Maturity |> summary() 
+# include in K-M and models, but not x-tabs. Same for other non-categorical, numeric variables. Great question!
+
+
 ```
 
 ### ii) Statistics
@@ -1304,7 +1340,7 @@ ggsurvfit::ggsurvfit(Overall_Style_KM_Model) +
 survdiff(Surv(Time, Event) ~ Parcel_Style, data = Overall_Survival_Curve_Data)
 # P-value: <2e-16 | Significant: Yes
 
-# ESM to DHL: Decided not to use this since there are way too many and it may be over-fitting. Also, the actual KM curve shows high instability due to these large, confidence intervals. Your chioce if we should use this but erring on the side of no
+# ESM to DHL: Decided not to use this since there are way too many and it may be over-fitting. Also, the actual KM curve shows high instability due to these large, confidence intervals. Your chioce if we should use this but erring on the side of no [I would re-examine after the data are fixed with respect to the coding of time, then you might be right: too many categories, and too many low-frequency categories. Re-grouping into fewer categories *might* be viable, but I would not spend too much time here.]
 
 ```
 
@@ -2336,6 +2372,8 @@ Residential_Baseline_CPH_Model <-
     Surv(Time, Event) ~ City
       , data = Residential_Survival_Curve_Data
     )
+
+ls(pattern = 'KM_Model')
 ```
 
 ## b) Yard Model 
@@ -2370,9 +2408,32 @@ Residential_Int_Yard_CPH_Model |> ggeffects::ggpredict() |> plot()
 ```
 
 ESM to DHL: The rest will be observed as additive instead of interaction to avoid overfitting
+[how can over-fitting be assessed at this stage?]
 
 ## c) Ecological Model
 ```{r}
+# DHL here, I was thinking instead of all of the ecological variables in one model, one model for each to see which one fits best
+
+eco_1 <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Ecological_Native_Status
+    , data = Residential_Survival_Curve_Data
+  )
+    
+eco_2 <-
+  survival::coxph(
+    Surv(Time, Event) ~ Ecological_Growth_Rate
+    , data = Residential_Survival_Curve_Data
+  )
+    
+eco_3 <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Ecological_Longevity
+    , data = Residential_Survival_Curve_Data
+  )
+
+performance::compare_performance(eco_1, eco_2, eco_3, rank = TRUE) # longevity
+
 # 1. Creating the Ecological Baseline Model
 Residential_Add_Ecological_CPH_Model <-
   survival::coxph(
