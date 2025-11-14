@@ -502,12 +502,12 @@ Overall_Survival_Curve_Data <-
 
 # double check
 Overall_Survival_Curve_Data |> 
-  select(Unique_ID : Time_Period, Time, Event, Survival_Days_In_Ground) |> 
+  select(Unique_ID : Time_Period, Resurvey, Time, Event, Survival_Days_In_Ground) |> 
   glimpse() # ERROR FIXME: time is not correctly coded
 
 ## EM: double check
 Overall_Survival_Curve_Data |>
-  select(Unique_ID, Time_Period, Survival_Days_In_Ground, Time, Event) |>
+  select(Unique_ID, Time_Period, Resurvey,  Survival_Days_In_Ground, Time, Event) |>
   group_by(Unique_ID, Survival_Days_In_Ground) |>
   filter(n() > 1) |>
   arrange(Unique_ID, Survival_Days_In_Ground, Time_Period)
