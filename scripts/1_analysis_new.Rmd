@@ -505,6 +505,14 @@ Overall_Survival_Curve_Data |>
   select(Unique_ID : Time_Period, Time, Event, Survival_Days_In_Ground) |> 
   glimpse() # ERROR FIXME: time is not correctly coded
 
+## EM: double check
+Overall_Survival_Curve_Data |>
+  select(Unique_ID, Time_Period, Survival_Days_In_Ground, Time, Event) |>
+  group_by(Unique_ID, Survival_Days_In_Ground) |>
+  filter(n() > 1) |>
+  arrange(Unique_ID, Survival_Days_In_Ground, Time_Period)
+# EM to DHL: There doesn't seem to be any duplicate trees that have the same Unique ID and Days in the Ground. I am confused if it is incorrectly coded or not? I did some double checks in 00_wrangling to make sure of that. 
+
 # 2. Preparing the Residential Survival Dataset
 Residential_Survival_Curve_Data <-
   General_Giveaway_Y2017_Y2024 |>
@@ -687,7 +695,7 @@ ggsurvfit::ggsurvfit(Overall_STG_City_KM_Model) +
    , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
   )
 
-# another view.
+# another view. ESM to DHL: This looks better. For teh final one, I will likely use this view for the KM we want to show that have variables and city
 ggsurvfit::ggsurvfit(Overall_STG_City_KM_Model) +
   ggsurvfit::add_confidence_interval() +
   ggsurvfit::add_risktable() +
@@ -883,6 +891,8 @@ Residential_Survival_Curve_Data |>
 ## ESM to DHL: Should I create size classes for these to be categorical?
 Residential_Survival_Curve_Data$Ecological_Height_Maturity |> summary() 
 # include in K-M and models, but not x-tabs. Same for other non-categorical, numeric variables. Great question!
+
+# ESM to DHL: I do not think I can include these in the KM since they are categorical, though.
 
 
 ```
@@ -1341,6 +1351,8 @@ survdiff(Surv(Time, Event) ~ Parcel_Style, data = Overall_Survival_Curve_Data)
 # P-value: <2e-16 | Significant: Yes
 
 # ESM to DHL: Decided not to use this since there are way too many and it may be over-fitting. Also, the actual KM curve shows high instability due to these large, confidence intervals. Your chioce if we should use this but erring on the side of no [I would re-examine after the data are fixed with respect to the coding of time, then you might be right: too many categories, and too many low-frequency categories. Re-grouping into fewer categories *might* be viable, but I would not spend too much time here.]
+
+# ESM to DHL: Sounds good!
 
 ```
 
@@ -2350,6 +2362,7 @@ Ecological:
 - Native
 - Growth Rate
 - Longevity
+- Size Classes
 
 Parcel:
 - Lot Size
@@ -2373,7 +2386,7 @@ Residential_Baseline_CPH_Model <-
       , data = Residential_Survival_Curve_Data
     )
 
-ls(pattern = 'KM_Model')
+ls(pattern = 'KM_Model') #ESM to DHL: What does this do? 
 ```
 
 ## b) Yard Model 
@@ -2412,7 +2425,9 @@ ESM to DHL: The rest will be observed as additive instead of interaction to avoi
 
 ## c) Ecological Model
 ```{r}
-# DHL here, I was thinking instead of all of the ecological variables in one model, one model for each to see which one fits best
+# DHL here, I was thinking instead of all of the ecological variables in one model, one model for each to see which one fits best 
+
+# ESM to DHL: This makes sense! I can do, like both, for each
 
 eco_1 <- 
   survival::coxph(
