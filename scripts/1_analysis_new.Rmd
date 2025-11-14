@@ -513,6 +513,32 @@ Overall_Survival_Curve_Data |>
   arrange(Unique_ID, Survival_Days_In_Ground, Time_Period)
 # EM to DHL: There doesn't seem to be any duplicate trees that have the same Unique ID and Days in the Ground. I am confused if it is incorrectly coded or not? I did some double checks in 00_wrangling to make sure of that. 
 
+
+# there should be two rows for each tree, one for time 1 and one for time 2
+# Survival_Days_In_Ground should be greater in time 2 than time 1
+Overall_Survival_Curve_Data |> 
+  select(Unique_ID : Time_Period, Time, Event, Survival_Days_In_Ground) |> 
+  filter(Unique_ID == 'C995') |> 
+  glimpse()
+
+
+Overall_Survival_Curve_Data |> 
+  group_by(Unique_ID) |> 
+  count() |> 
+  ggplot(aes(n)) + 
+  geom_bar()
+
+Overall_Survival_Curve_Data |> 
+  group_by(Unique_ID) |> 
+  count() |> 
+  filter(n == 2)
+
+Overall_Survival_Curve_Data |> 
+  select(Unique_ID : Time_Period, Time, Event, Survival_Days_In_Ground) |> 
+  filter(Unique_ID == 'C1022') |> 
+  glimpse()
+
+
 # 2. Preparing the Residential Survival Dataset
 Residential_Survival_Curve_Data <-
   General_Giveaway_Y2017_Y2024 |>
