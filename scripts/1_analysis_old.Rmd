@@ -63,7 +63,6 @@ vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE,
 ```
 
 # 1. Analysis Prepartion
-
 ```{r}
 # 1. Reading in the final giveaway data set
 Final_Giveaway_Y2017_Y2024 <-
@@ -378,11 +377,6 @@ General_Giveaway_Y2017_Y2024 |> tabyl(Identifier) |> tabyl(n) # they all have tw
 
 General_Giveaway_Y2017_Y2024 |> filter(Identifier == 'CHELSEA_352') #ESM: Seems to work now, also did my double checks for some clarity
 # as an example yield two rows.
-
-General_Giveaway_Y2017_Y2024 |> glimpse()
-General_Giveaway_Y2017_Y2024 |> 
-  select(Survival_Days_In_Ground, Identifier : Date_Surveyed, starts_with('Survival'))
-
 ```
 
 ```{r}
@@ -767,110 +761,3 @@ coxph_int |>
     ggeffects::ggpredict(terms = c('City', 'Residential')) |> plot()
 
 ```
-
-
-### COX-PH more covariates
-```{r}
-
-dat <- 
-  General_Giveaway_Y2017_Y2024 |>
-   filter(Research_Site_Type %in% c("Front Yard", "Backyard", "Side Yard", "Residential Right-of-Way")) |>
-   mutate(
-     City = factor(if_else(City == "CHELSEA", "Chelsea", "Holyoke"))
-   , Residential = fct_recode(Research_Site_Type, "Front" = "Front Yard", "Back" = "Backyard", "Side" = "Side Yard", "Right-of-way" = "Residential Right-of-Way")
-   , Time = as.numeric(Survival_Days_In_Ground) # Trying to ignore the NAs
-   , Event = Survival_Status
-  ) |>
-  filter(
-     !is.na(Time)
-   , !is.na(Event)
-   , !is.na(Residential)
-  ) 
-
-
-dat |> glimpse()
-
-mod_base <- 
-  survival::coxph(
-    Surv(Time, Event) ~ 1
-    , data = dat
-  )
-
-
-mod_city <- 
-  survival::coxph(
-    Surv(Time, Event) ~ City 
-    , data = dat
-  )
-
-mod_res <- 
-  survival::coxph(
-    Surv(Time, Event) ~ Residential 
-    , data = dat
-  )
-
-mod_city_res_add <- 
-  survival::coxph(
-    Surv(Time, Event) ~ City + Residential
-    , data = dat
-  )
-
-
-mod_city_res_int <- 
-  survival::coxph(
-    Surv(Time, Event) ~ City*Residential
-    , data = dat
-  )
-
-
-
-mod_city_res_int_parcel_yr <- 
-  survival::coxph(
-    Surv(Time, Event) ~ City*Residential + Parcel_Year
-    , data = dat
-  )
-
-
-ls(pattern = 'mod_') |>
-  mget() |> 
-  performance::compare_performance(rank = TRUE)
-
-# best_mod <- 
-  ls(pattern = 'mod_') |>
-  mget() |> 
-  performance::compare_performance(rank = TRUE) |> 
-  tibble()
-  slice(1) |> 
-  pull(Name) |> 
-  pluck(1)
-
-
-# select_and_plot_mod <- function(mod_1, mod_2, mod_3, mod_4) {
-#   winning_mod <- 
-#     compare_performance(
-#         mod_1
-#       , mod_2
-#       , mod_3 # new!
-#       , mod_4 # new!
-#       , rank = TRUE
-#       ) |> 
-#     tibble() |> 
-#     arrange(desc(Performance_Score)) |> # is this really needed?
-#     slice(1) |> 
-#     pull(Name) |> 
-#     mget() |> 
-#     pluck(1)
-
-  best_mod
-best_mod |> broom::tidy()
-best_mod |> ggeffects::ggpredict()
-
-best_mod |>
-    ggeffects::ggpredict(terms = c('City', 'Residential')) 
-
-
-best_mod |>
-    ggeffects::ggpredict(terms = c('City', 'Residential')) |> plot()
-
-```
-

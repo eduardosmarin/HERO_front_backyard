@@ -1,0 +1,96 @@
+---
+title: "EVST 4960 Land Cover Data"
+subtitle: "Calculating Land Cover data for Final Project"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  Final_Giveaway_Y2017_Y2024_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+# 0. Loading the packages
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Loading all packages
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'tidycensus' # tidy census package
+          , 'tidygeocoder' # geo coding
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          , 'shiny'
+          , 'leafsync'  # linked maps
+          , 'openxlsx'
+          , 'readxl'
+          )     
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+
+# 3. Items for tidy census
+census_api_key('58fc555c77c229747ade7d9fe50e7c71297cf91a', install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+options(tigris_use_cache = TRUE)
+```
+
+# 1. Reading in the Dataset
+```{r}
+# 1. Final Giveaway Dataset
+Final_Giveaway_Y2017_Y2024 <-
+  st_read("input_data/Final_Giveaway_Y2017_Y2024_2025-11-01.gpkg")
+```
+
+
+# 2. Conducting the Analysis for the Methodology
+```{r}
+# 1. Figuring out how many Surveyed in Chelsea & Holyoke (2017 & 2024)
+## a) Reading in original before transformations
+Pre_Chelsea_Giveaways <-
+  read_csv("input_data/Chelsea/Tree Giveaways/2017CorrectedChelseaAllTreesComplete.csv")
+
+Pre_Holyoke_Giveaways <-
+  read_csv("input_data/Holyoke/Tree Giveaways/holy_random_clean_fixed.csv") 
+
+## b) Finding the counts of dates present in date_surveyed
+
+
+Final_Giveaway_Y2017_Y2024 |>
+  group_by(City, Year_Surveyed) |>
+  summarise(Tree_Count = n()) |>
+  arrange(City, Year_Surveyed)
+
+
+```
+

@@ -1,0 +1,2617 @@
+---
+title: "EVST 4960 Analysis"
+subtitle: "Completing the Statistical Tests"
+author: "Eduardo Marin"
+date: "`r format(Sys.time())`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: flatly
+    code_folding: hide
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    toc: true
+    toc_float: true
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+```{r 1. Loading Packages, message=FALSE, include=FALSE}
+# 1. Outputs
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # <--- this suppresses warnings
+  message = FALSE    # <--- this suppresses messages
+)
+
+packs <-c(
+            'janitor'    # cleans things up, also pipe-friendly cross-tabulations
+           , 'sf'         # for spatial data support
+          , 'tidyverse'  # cuz
+          , 'tidylog'    # prints out what was done in dplyr and tidyr
+          , 'magrittr'   # for the pipe
+          , 'mapview'    # web maps for zooming and panning around
+          #, 'beepr'      # makes noise when things are done!
+          , 'tictoc'     # timing things.
+          , 'raster'
+          # , 'doParallel' # does what is says! PARALLEL
+          # 'broom.mixed',# tidiers for mixed models AND nlme::gls()
+          # , 'lubridate'   # DATES!
+          , 'leaflet' #creating the interactive mapping elements (more specific)
+          # , 'leafsync'  # linked maps
+          # , 'RColorBrewer'
+          , 'survival'
+          , 'ggsurvfit'
+          , 'gtsummary'
+          , 'forcats'
+          , 'survival'  # These are packages used from Dexter for the survivorship curve
+          , 'ggsurvfit' # These are packages used from Dexter for the survivorship curve
+          , 'gtsummary' # These are packages used from Dexter for the survivorship curve
+          )     
+
+
+#2. If the packages in 'packs' are not already installed, install them
+if (length(setdiff(packs, rownames(installed.packages()))) > 0) {
+install.packages(setdiff(packs, rownames(installed.packages())))
+}
+vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE, quietly = TRUE)
+```
+
+# 1. Data Setup 
+```{r}
+# 1. Reading in the final giveaway data set
+Final_Giveaway_Y2017_Y2024 <-
+  st_read("input_data/Final_Giveaway_Y2017_Y2024_2025-11-12.gpkg") |>
+  st_drop_geometry()
+
+# 2. Developing the code used for the General Survivorship Curves, which can be partitioned later based on other factors
+General_Giveaway_Y2017_Y2024 <-
+  Final_Giveaway_Y2017_Y2024 |>
+  group_by(Unique_ID) |>
+  filter(
+    any(
+      # Case 1: Tree observed at both Time 1 and Time 2
+      Survival_Has_T1_Observation & Survival_Has_T2_Observation | #or
+      # Case 2: Seen as dead in T1 and dead at T2
+      (Survival_Has_T1_Observation & Survival_Status == 1 & Survival_Inspection == 1) | #or
+      # Case 3: Seen in T2 (alive, so alive before)
+      (Survival_Status == 0 & Survival_Inspection == 2 & Date_Planted < as_date("2017-05-30")) | 
+      # Case 4: Dead in T2 & Date of the Planting > Inspection Date in T1 (Planted in between T1 and T2)
+      (Survival_Status == 1 & Survival_Inspection == 2 &
+         !is.na(Survival_Inspection_Date)  & #Ask what is NAs; do I assume it is not observed
+         Date_Planted > as_date("2017-06-27")) #That is the last inspection date of 2017 | B
+      , na.rm = TRUE)
+  ) |>
+  filter(Mortality != "Unknown") |>
+  ungroup()
+
+# 3. Creating simpler code for the Chi Square tests
+## a) Ensuring accurate accounting in T1 and T2
+### i. Correcting T1 | Making sure to account for NAs in T1 (never surveyed) that were found to be alive in T2
+Giveaway_Alive_T1 <- 
+  General_Giveaway_Y2017_Y2024 |>
+  filter(
+   , Year_Surveyed == 2017   # Only for those in 2017     
+   , is.na(Mortality) # Those without a mortality status         
+   , Survival_Status == 0    # Those that had a survey 2 that did not elicit an event        
+  )
+
+Vector_Giveaway_Alive_T1 <-
+  unique(Giveaway_Alive_T1$Unique_ID)
+
+
+Vector_Giveaway_Alive_T1
+
+### ii. Correcting T2 | Making sure to remove those that were marked as dead in T1 and again marked dead in T2 (since that'd be double counting!)
+Giveaway_Dead_T2 <- 
+  General_Giveaway_Y2017_Y2024 |>
+  group_by(Unique_ID) |>
+  summarise(
+    Dead_T1 = any(Mortality %in% c("Standing Dead","Removed","Stump") & Time_Period == "Time 1")
+  , Dead_T2 = any(Mortality %in% c("Standing Dead","Removed","Stump") & Time_Period == "Time 2") 
+  ) |>
+  filter(Dead_T1 & Dead_T2)
+
+Vector_Giveaway_Dead_T2 <-
+  unique(Giveaway_Dead_T2$Unique_ID)
+
+Vector_Giveaway_Dead_T2
+
+## b) Making sure to create accurate Time 1 (Converting some Time 2 to Time 1) for the Case 4 added earlier
+Giveaway_Case_4 <-
+  General_Giveaway_Y2017_Y2024 |>
+  filter(Time_Period != "Time 1") |>
+  mutate(Time_Period = ifelse((Survival_Status == 1 & Survival_Inspection == 2 & Date_Planted > as_date("2017-06-27")), "Time 1", Time_Period)) |>
+  filter(Time_Period != "Time 2")
+
+Vector_Giveaway_Case_4 <-
+   unique(Giveaway_Case_4$Unique_ID)
+
+## c) Preparing the data for the Chi Square
+Chi_Giveaway_Y2017_Y2024 <-
+  General_Giveaway_Y2017_Y2024 |>
+  filter(!Unique_ID %in% Vector_Giveaway_Case_4) |>
+  rbind(Giveaway_Case_4) |>
+  mutate(
+      Time = case_when(
+      Time_Period == "Time 1" ~ "T1"
+    , Time_Period == "Time 2" ~ "T2"
+    , TRUE ~ NA_character_
+    )
+    , Status = case_when(
+      Unique_ID %in% Vector_Giveaway_Dead_T2 & Time == "T2" ~ NA_character_ # Avoids double counting
+    , Unique_ID %in% Vector_Giveaway_Alive_T1 & Time == "T1" ~ "Alive"
+    , Mortality %in% c("Standing Dead", "Removed", "Stump") ~ "Dead" # In general dead
+    , Mortality == "Alive" ~ "Alive" # Reiterating if it is alive, it is alive
+    , TRUE ~ Mortality 
+    )
+    , city = factor(City, levels = c("Chelsea","Holyoke"))
+  ) |>
+ filter(!is.na(Status)) 
+
+## d) Preparing the data for the yards
+Chi_Giveaway_Yard_Y2017_Y2024 <-
+  Chi_Giveaway_Y2017_Y2024 |>
+  filter(Land_Use_General == "Residential") |>
+  mutate(Yard = fct_recode(Site_Type_Specific 
+        , "Front" = "Front Yard"
+        , "Back" = "Backyard"
+        , "Side" = "Side Yard"
+      )) |>
+  filter(!is.na(Site_Type_Specific))
+
+```
+
+# 2. Statistical Analysis | Chi Square Tests
+## a) Overall Dataset
+### i) Time Survivorship
+```{r}
+# 1. Time and Survivorship (Count)
+Chi_Giveaway_Y2017_Y2024 |>
+  tabyl(Status, Time) |> 
+  adorn_totals("row") 
+
+# 2. Time and Survivorship (Percentage)
+Chi_Giveaway_Y2017_Y2024 |>
+  tabyl(Status, Time) |>
+  adorn_totals("row") |>
+  adorn_percentages("col") |>
+  adorn_pct_formatting(digits = 1)
+
+# 3. Time and Survivorship (Chi Square)
+Chi_Giveaway_Y2017_Y2024 |>
+  janitor::tabyl(Time, Status) |> 
+  janitor::chisq.test() |> 
+  broom::tidy()
+```
+
+### ii) City Survivorship
+```{r}
+# 1. City and Survivorship (Count)
+Chi_Giveaway_Y2017_Y2024 |>
+  tabyl(Status, City) |> 
+  adorn_totals("row") 
+
+# 2. City and Survivorship (Percentage)
+Chi_Giveaway_Y2017_Y2024 |>
+  tabyl(Status, City) |>
+  adorn_totals("row") |>
+  adorn_percentages("col") |>
+  adorn_pct_formatting(digits = 1)
+
+# 3. City and Survivorship (Chi Square)
+Chi_Giveaway_Y2017_Y2024 |>
+  janitor::tabyl(Status, City) |> 
+  janitor::chisq.test() |> 
+  broom::tidy()
+```
+
+### iii) Time x City Survivorship
+```{r}
+# 1. Time x City and Survivorship (Count)
+Chi_Giveaway_Y2017_Y2024 |>
+  count(Time, City, Status) |>
+  pivot_wider(
+     names_from = Status
+   , values_from = n
+  ) |>
+  arrange(City, Time) |>
+  mutate(Dead = ifelse(is.na(Dead), 0, Dead))
+
+# 2. Time x City and Survivorship (Percentage)
+Chi_Giveaway_Y2017_Y2024 |> 
+  count(Time, City, Status, name = "n") |>
+  tidyr::pivot_wider(
+    names_from = Status
+  , values_from = n
+  , values_fill = 0 # instead of the ifelse in a mutate
+  ) |>
+  mutate(
+     Total = Alive + Dead
+   , `Alive (%)` = round(100 * (Alive / Total), 1)
+   , `Dead (%)`  = round(100 * (Dead  / Total), 1)
+  ) |>
+  tidylog::select(Time, City, Total, `Alive (%)`, `Dead (%)`) |>
+  arrange(City, Time) 
+
+# 3. Time x City and Survivorship (Chi Squares)
+bind_rows(
+    Chi_Giveaway_Y2017_Y2024 |>
+      filter(Time == "T1") |>
+      janitor::tabyl(Status, City) |>
+      janitor::chisq.test() |>
+      broom::tidy() |>
+      mutate(Time = "T1")
+  
+  , Chi_Giveaway_Y2017_Y2024 |>
+      filter(Time == "T2") |>
+      janitor::tabyl(Status, City) |>
+      janitor::chisq.test() |>
+      broom::tidy() |>
+      mutate(Time = "T2") 
+    ) 
+```
+
+## b) Site-specific Dataset
+### i) Time Survivorship
+```{r}
+# 1. Time and Survivorship (Count)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  tabyl(Status, Time) |> 
+  adorn_totals("row") 
+
+# 2. Time and Survivorship (Percentage)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  tabyl(Status, Time) |>
+  adorn_totals("row") |>
+  adorn_percentages("col") |>
+  adorn_pct_formatting(digits = 1)
+
+# 3. Time and Survivorship (Chi Square)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  janitor::tabyl(Time, Status) |> 
+  janitor::chisq.test() |> 
+  broom::tidy()
+
+```
+
+### ii) City Survivorship
+```{r}
+# 1. City and Survivorship (Count)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  tabyl(Status, City) |> 
+  adorn_totals("row") 
+
+# 2. City and Survivorship (Percentage)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  tabyl(Status, City) |>
+  adorn_totals("row") |>
+  adorn_percentages("col") |>
+  adorn_pct_formatting(digits = 1)
+
+# 3. City and Survivorship (Chi Square)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  janitor::tabyl(Status, City) |> 
+  janitor::chisq.test() |> 
+  broom::tidy()
+
+```
+
+### iii) Yard Survivorship
+```{r}
+# 1. Yard and Survivorship (Count)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  tabyl(Status, Yard) |> 
+  adorn_totals("row") 
+
+# 2. Yard and Survivorship (Percentage)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  tabyl(Status, Yard) |>
+  adorn_totals("row") |>
+  adorn_percentages("col") |>
+  adorn_pct_formatting(digits = 1)
+
+# 3. Yard and Survivorship (Chi Square)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  janitor::tabyl(Status, Yard) |> 
+  janitor::chisq.test() |> 
+  broom::tidy()
+
+```
+
+### iv) Time x City Survivorship
+```{r}
+# 1. Time x City and Survivorship (Count)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  count(Time, City, Status) |>
+  pivot_wider(
+     names_from = Status
+   , values_from = n
+  ) |>
+  arrange(City, Time) |>
+  mutate(Dead = ifelse(is.na(Dead), 0, Dead))
+
+# 2. Time x City and Survivorship (Percentage)
+Chi_Giveaway_Yard_Y2017_Y2024 |> 
+  count(Time, City, Status, name = "n") |>
+  tidyr::pivot_wider(
+    names_from = Status
+  , values_from = n
+  , values_fill = 0 # instead of the ifelse in a mutate
+  ) |>
+  mutate(
+     Total = Alive + Dead
+   , `Alive (%)` = round(100 * (Alive / Total), 1)
+   , `Dead (%)`  = round(100 * (Dead  / Total), 1)
+  ) |>
+  tidylog::select(Time, City, Total, `Alive (%)`, `Dead (%)`) |>
+  arrange(City, Time) 
+#ESM to DHl: Why is the Dead % so low for Chelsea in T2 within Residential Yards? Is that an error on my end? This is probably why it is significant in T2
+
+# 3. Time x City and Survivorship (Chi Squares)
+bind_rows(
+    Chi_Giveaway_Yard_Y2017_Y2024 |>
+      filter(Time == "T1") |>
+      janitor::tabyl(Status, City) |>
+      janitor::chisq.test() |>
+      broom::tidy() |>
+      mutate(Time = "T1")
+  
+  , Chi_Giveaway_Yard_Y2017_Y2024 |>
+      filter(Time == "T2") |>
+      janitor::tabyl(Status, City) |>
+      janitor::chisq.test() |>
+      broom::tidy() |>
+      mutate(Time = "T2") 
+    )
+```
+
+### v) Time x Yard Survivorship
+```{r}
+# 1. Time x Yard and Survivorship (Count)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  count(Time, Yard, Status) |>
+  pivot_wider(
+     names_from = Status
+   , values_from = n
+  ) |>
+  arrange(Yard, Time) |>
+  mutate(Dead = ifelse(is.na(Dead), 0, Dead))
+
+# 2. Time x Yard and Survivorship (Percentage)
+Chi_Giveaway_Yard_Y2017_Y2024 |> 
+  count(Time, Yard, Status, name = "n") |>
+  tidyr::pivot_wider(
+    names_from = Status
+  , values_from = n
+  , values_fill = 0 # instead of the ifelse in a mutate
+  ) |>
+  mutate(
+     Total = Alive + Dead
+   , `Alive (%)` = round(100 * (Alive / Total), 1)
+   , `Dead (%)`  = round(100 * (Dead  / Total), 1)
+  ) |>
+  tidylog::select(Time, Yard, Total, `Alive (%)`, `Dead (%)`) |>
+  arrange(Yard, Time) 
+
+# 3. Time x Yard and Survivorship (Chi Squares)
+bind_rows(
+    Chi_Giveaway_Yard_Y2017_Y2024 |>
+      filter(Time == "T1") |>
+      janitor::tabyl(Status, Yard) |>
+      janitor::chisq.test() |>
+      broom::tidy() |>
+      mutate(Time = "T1")
+  
+  , Chi_Giveaway_Yard_Y2017_Y2024 |>
+      filter(Time == "T2") |>
+      janitor::tabyl(Status, Yard) |>
+      janitor::chisq.test() |>
+      broom::tidy() |>
+      mutate(Time = "T2") 
+    )
+
+#ESM to DHL: There might be an issue currently adding the Venn Diagram of Time 2 Survey, Time 1 NA, and Survival to the dataset; might be overinflating the dataset
+```
+
+### vi) Time x City x Yard Survivorship
+```{r}
+# 1. Time x City x Yard and Survivorship (Count)
+Chi_Giveaway_Yard_Y2017_Y2024 |>
+  count(Time, City, Yard, Status) |>
+  pivot_wider(
+     names_from = Status
+   , values_from = n
+  ) |>
+  arrange(Time, City, Yard) |>
+  mutate(Dead = ifelse(is.na(Dead), 0, Dead))
+
+# 2. Time x City x Yard and Survivorship (Percentage)
+Chi_Giveaway_Yard_Y2017_Y2024 |> 
+  count(Time, City, Yard, Status, name = "n") |>
+  tidyr::pivot_wider(
+    names_from = Status
+  , values_from = n
+  , values_fill = 0 # instead of the ifelse in a mutate
+  ) |>
+  mutate(
+     Total = Alive + Dead
+   , `Alive (%)` = round(100 * (Alive / Total), 1)
+   , `Dead (%)`  = round(100 * (Dead  / Total), 1)
+  ) |>
+  tidylog::select(Time, City, Yard, Total, `Alive (%)`, `Dead (%)`) |>
+  arrange(Time, City, Yard)
+
+# 3. Time x City x Yard and Survivorship (Chi Squares & Fishers)
+## a) Time x Yard Survivorship (Chi & Fisher Square)
+  bind_rows(
+    Chi_Giveaway_Yard_Y2017_Y2024 |>
+      filter(Time == "T1") |>
+      filter(City == "Chelsea") |>
+      janitor::tabyl(Status, Yard) |>
+      janitor::chisq.test() |>
+      broom::tidy() |>
+      mutate(Time = "T1", Comparison = "Yard x Chelsea Status")
+  
+  , Chi_Giveaway_Yard_Y2017_Y2024 |>
+      filter(Time == "T1") |>
+      filter(City == "Holyoke") |>
+      janitor::tabyl(Status, Yard) |>
+      janitor::chisq.test() |>
+      broom::tidy() |>
+      mutate(Time = "T1", Comparison = "Yard x Holyoke Status")
+    
+  , Chi_Giveaway_Yard_Y2017_Y2024 |>
+      filter(Time == "T2") |>
+          filter(City == "Chelsea") |>
+      janitor::tabyl(Status, Yard) |>
+      janitor::fisher.test() |> # Due to small sample size
+      broom::tidy() |>
+      mutate(Time = "T2", Comparison = "Yard x Chelsea Status")
+  
+   , Chi_Giveaway_Yard_Y2017_Y2024 |>
+      filter(Time == "T2") |>
+      filter(City == "Holyoke") |>
+      janitor::tabyl(Status, Yard) |>
+      janitor::fisher.test() |> # Due to small sample size
+      broom::tidy() |>
+      mutate(Time = "T2", Comparison = "Yard x Holyoke Status")
+  )
+```
+
+# 3. Data Analysis | Kaplan-Meier Curves
+## a) General 
+### i) Data preparation
+```{r}
+# 1. Preparing the Overall Survival Dataset
+Overall_Survival_Curve_Data <-
+  General_Giveaway_Y2017_Y2024 |>
+  mutate(
+     Time = as.numeric(Survival_Days_In_Ground) # Trying to ignore the NAs
+   , Event = Survival_Status
+  ) |>
+  filter(
+     !is.na(Time)
+   , !is.na(Event)
+  )
+
+# 2. Preparing the Residential Survival Dataset
+Residential_Survival_Curve_Data <-
+  General_Giveaway_Y2017_Y2024 |>
+  filter(Land_Use_General %in% c("Residential")) |>
+  mutate(Yard = fct_recode(Site_Type_Specific 
+        , "Front" = "Front Yard"
+        , "Back" = "Backyard"
+        , "Side" = "Side Yard"
+      )) |>
+  filter(!is.na(Site_Type_Specific)) |>
+  mutate(
+     Time = as.numeric(Survival_Days_In_Ground) # Trying to ignore the NAs
+   , Event = Survival_Status
+  ) |>
+  filter(
+     !is.na(Time)
+   , !is.na(Event)
+   , !is.na(Yard)
+  )
+```
+
+### ii) Cross tabs
+ESM to DHL: I do not have to do time periods for the cross tabs, right? This is since time is represneted as continuous and does not to be considered
+
+```{r}
+# 1. Cross tabs for Public-Private by City
+## a) Count & Percentage
+Overall_Survival_Curve_Data |>
+  janitor::tabyl(Public_Private, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+
+# 2. Cross tabs for General Site Type by City
+Overall_Survival_Curve_Data |>
+  janitor::tabyl(Site_Type_General, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() 
+
+# 3. Cross tabs for Specific Site Type by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Site_Type_Specific, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() 
+
+# Seems legit, however, it might be getting a little too small for Side Yards in Holyoke specifically ~ 16 actual counts
+```
+
+### iii) Statistics
+#### A) Overall
+```{r}
+# 1. Creating [Overall] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ 1, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+  labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+# 2. Creating [Overall x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ City, data = Overall_Survival_Curve_Data)
+# P-value: 7e-11 | Significant: Yes
+
+```
+
+#### B) Public-Private (PP)
+```{r}
+# 1. Creating [Public-Private] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_PP_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Public_Private, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_PP_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Public-Private Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Public_Private, data = Overall_Survival_Curve_Data)
+# P-value: 6e-10 | Significant: Yes
+
+# 2. Creating [Public-Private x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_PP_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Public_Private + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_PP_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Public-Private and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Public_Private + City, data = Overall_Survival_Curve_Data)
+# P-value: <2e-16 | Significant: Yes
+```
+
+#### C) Site Type General (STG)
+```{r}
+# 1. Creating [Site Type General] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_STG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Site_Type_General, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_STG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Site Type (General) Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Site_Type_General, data = Overall_Survival_Curve_Data)
+# P-value: 1e-14 | Significant: Yes
+
+# 2. Creating [Site Type General x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_STG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Site_Type_General + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_STG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Site Type (General) and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Site_Type_General + City, data = Overall_Survival_Curve_Data)
+# P-value: <2e-16 | Significant: Yes
+```
+
+#### C) Residential, Yard
+```{r}
+# 1. Creating [Residential Yard] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Yard_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Yard, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Yard_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Yard-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+# ESM to DHL: Confidence intervals seem to be very large in the visualization here. What should we do?
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Yard, data = Residential_Survival_Curve_Data)
+# P-value: 0.4 | Significant: No
+
+# 2. Creating [Residential Yard x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Yard_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Yard + City, data = Residential_Survival_Curve_Data)
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Yard_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Yard and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Yard + City, data = Residential_Survival_Curve_Data)
+# P-value: <2e-16 | Significant: Yes
+
+# ESM to DHL: Seems that the significance levels being low is primarily due to the addition of the city variable
+```
+
+## b) Ecological
+### i) Cross tabs
+
+ESM to DHL: Should this be of Overall or Residential-specific? Second, is this based off of the variable looked at alone or in context with yard?
+
+```{r}
+# 1. Cross tabs for Broadleaf and Conifer by City 
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Broadleaf_Conifer, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Ecology, Should Use? No
+
+# 2. Cross tabs for Native Status by City 
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Native_Status, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use Alone? Yes
+
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Native_Status, City, Yard) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use with Yard? No [Too Small]
+
+# 3. Cross tabs for Growth Form by City 
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Growth_Form, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use Alone? No
+
+# 4. Cross tabs for Percent Leaf Type by City [No]
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Percent_Leaf_Type, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use Alone? No
+
+# 5. Cross tabs for Leaf Type by City
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Leaf_Type, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use Alone? No
+
+# 6. Cross tabs for Growth Rate by City
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Growth_Rate, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use Alone? Yes
+
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Growth_Rate, City, Yard) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use with Yard? No [Too Small]
+
+# 7. Cross tabs for Longevity by City
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Ecological_Longevity, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+
+# Ecology, Should Use Alone? Maybe [NAs...]
+
+# 8. Cross tabs for Longevity by City
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Season_Planted, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+
+# Ecology, Should Use Alone? Yes
+
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Season_Planted, City, Yard) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use with Yard? Yes
+
+# 9. Cross tabs for Height Maturity by City
+## ESM to DHL: Should I create size classes for these to be categorical?
+```
+
+### ii) Statistics
+#### A) Season Planed (SP) [Include: Yes]
+##### 1. Overall
+```{r}
+# 1. Creating [Native Status] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_SP_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Season_Planted, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_SP_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Season Planted Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Season_Planted, data = Overall_Survival_Curve_Data)
+# P-value: 0.02 | Significant: Yes
+
+# 2. Creating [Native Status x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_SP_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Season_Planted + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_SP_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Season Planted and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Season_Planted + City, data = Overall_Survival_Curve_Data)
+# P-value: 2e-10 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Season Planted] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_SP_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Season_Planted, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_SP_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Season Planted Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Season_Planted, data = Residential_Survival_Curve_Data)
+# P-value: 0.001 | Significant: Yes
+
+# 2. Creating [Season Planted x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_SP_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Season_Planted + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_SP_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Season Planted and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Season_Planted + City, data = Residential_Survival_Curve_Data)
+# P-value: 9e-15 | Significant: Yes
+
+```
+
+#### B) Native [Include: Yes]
+##### 1. Overall
+```{r}
+# 1. Creating [Native Status] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Native_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Native_Status, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Native_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Native Status-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Native_Status, data = Overall_Survival_Curve_Data)
+# P-value: 2e-04 | Significant: Yes
+
+# 2. Creating [Native Status x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Native_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Native_Status + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Native_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Native Status and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Native_Status + City, data = Overall_Survival_Curve_Data)
+# P-value: 3e-11 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Native Status] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Native_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Native_Status, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Native_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Native Status-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Native_Status, data = Residential_Survival_Curve_Data)
+# P-value: 0.001 | Significant: Yes
+
+# 2. Creating [Native Status x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Native_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Native_Status + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Native_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Native Status and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Native_Status + City, data = Residential_Survival_Curve_Data)
+# P-value: 9e-15 | Significant: Yes
+
+```
+
+#### C) Growth Rate (GR) [Include: Yes?]
+Seems to be significant in residential yards but not overall, very interesting!
+##### 1. Overall
+```{r}
+# 1. Creating [Growth Rate] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_GR_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Longevity, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_GR_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Growth Rate Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Longevity, data = Overall_Survival_Curve_Data)
+# P-value: 0.2 | Significant: No
+
+# 2. Creating [Growth Rate x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_GR_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Longevity + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_GR_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Growth Rate and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Growth_Rate + City, data = Overall_Survival_Curve_Data)
+# P-value: 2e-05 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Growth Rate] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_GR_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Growth_Rate, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_GR_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Growth Rate Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Growth_Rate, data = Residential_Survival_Curve_Data)
+# P-value: 0.02 | Significant: Yes
+
+# 2. Creating [Growth Rate x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_GR_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Growth_Rate + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_GR_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Growth Rate and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Growth_Rate + City, data = Residential_Survival_Curve_Data)
+# P-value: 7e-16 | Significant: Yes
+
+```
+
+#### D) Longevity [Include: Yes?]
+Seems to be significant in residential yards but not overall, very interesting! Odd, however, since it says that short longevity trees have higher survivorship.
+##### 1. Overall
+```{r}
+# 1. Creating [Longevity] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Longevity_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Longevity, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Longevity_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Longevity Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Longevity, data = Overall_Survival_Curve_Data)
+# P-value: 0.5 | Significant: No
+
+# 2. Creating [Longevity x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Longevity_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Longevity + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Longevity_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Longevity and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Longevity + City, data = Overall_Survival_Curve_Data)
+# P-value: 1e-04 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Longevity] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Longevity_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Longevity, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Longevity_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Longevity Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Longevity, data = Residential_Survival_Curve_Data)
+# P-value: 0.003 | Significant: Yes
+
+# 2. Creating [Longevity x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Longevity_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Longevity + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Longevity_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Longevity and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Longevity + City, data = Residential_Survival_Curve_Data)
+# P-value: 9e-12 | Significant: Yes
+```
+
+## c) Parcel
+### i) Cross tabs
+```{r}
+# 1. Cross tabs for Parcel Style by City 
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Parcel_Style, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() 
+# Parcel, Should Use? No (Residential)
+
+Overall_Survival_Curve_Data |>
+  janitor::tabyl(Parcel_Style, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() 
+# Parcel, Should Use? Yes (Overall) - some are too small, but generally curious on how it would look
+
+# 2. Cross tabs for Lot Size by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Parcel_Lot_Size_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() 
+# Parcel, Should Use? Yes? | Tertile based off of Overall (no large lot size for Chelsea)
+
+# 3. Cross tabs for Age Group by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Parcel_Age_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Parcel, Should Use? Yes
+
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Parcel_Age_Group, Yard, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Parcel, Should Use? Maybe? Small amount on the Side yard
+
+# 4. Cross tabs for Total_Value by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Parcel_Total_Value_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Parcel, Should Use? Yes
+
+```
+
+### ii) Statistics
+#### A) Style [Include: No]
+##### 1. Overall
+```{r}
+# 1. Creating [Style] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Style_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Style, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Style_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Building Style Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Style, data = Overall_Survival_Curve_Data)
+# P-value: <2e-16 | Significant: Yes
+
+# ESM to DHL: Decided not to use this since there are way too many and it may be over-fitting. Also, the actual KM curve shows high instability due to these large, confidence intervals. Your chioce if we should use this but erring on the side of no
+
+```
+
+#### B) Lot Size Groups (LSG) [Include: Maybe?]
+Unsure if this could be correlated with the type/usage, like institutional. This is why I am not sure if we should include lot sizes here.  
+##### 1. Overall
+```{r}
+# 1. Creating [Lot Size Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_LSG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Lot_Size_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_LSG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Lot Size Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Lot_Size_Group, data = Overall_Survival_Curve_Data)
+# P-value: <2e-16 | Significant: Yes
+
+# 2. Creating [Lot Size Group x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_LSG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Lot_Size_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_LSG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Lot Size Groups and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Lot_Size_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: <2e-16 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Lot Size Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_LSG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Lot_Size_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_LSG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Lot Size Groups Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Lot_Size_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= 1e-10  | Significant: Yes
+
+# 2. Creating [Longevity x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_LSG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Lot_Size_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_LSG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Lot Size Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Lot_Size_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= <2e-16 | Significant: Yes
+```
+
+#### C) Age Groups (AG) [Include: No]
+Neither residential or overall are significant on their own. Thus, we should likely not use this. 
+##### 1. Overall
+```{r}
+# 1. Creating [Age Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_AG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Age_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_AG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Building Age Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Age_Group, data = Overall_Survival_Curve_Data)
+# P-value: 0.4 | Significant: No
+
+# 2. Creating [Age x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_AG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Age_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_AG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Building Groups and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Age_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: <3e-09 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Age Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_AG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Age_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_AG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Building AGe Groups Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Age_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= 0.6 | Significant: No
+
+# 2. Creating [Age x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_AG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Age_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_AG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Building Age Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, stude
+   nts surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Age_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= 5e-15 | Significant: Yes
+```
+
+#### D) Total Value Groups (TVG) [Include: Maybe?]
+Similar to the lot size groups, it seems to have no statistical significance for the overall group. However, when looking specifically at residential properties, there appears to have some significance, with the poorest performance going to low-value yards; which makes sense from the past literature. It seems to have the opposite trend size compared to lot sizes. Unsure why. That is why I mentioned it as unsure
+
+##### 1. Overall
+```{r}
+# 1. Creating [Total Value Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_TVG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Total_Value_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_TVG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Total Value Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Total_Value_Group, data = Overall_Survival_Curve_Data)
+# P-value: 0.2 | Significant: No
+
+# 2. Creating [Total Value x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_TVG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Total_Value_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_TVG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Total Value Group and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Total_Value_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: <5e-11 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Total Value Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_TVG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Total_Value_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_TVG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Total Value Group Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Total_Value_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= 2e-06 | Significant: No
+
+# 2. Creating [Total Value x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_TVG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Total_Value_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_TVG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Total Value Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Total_Value_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= 5e-14 | Significant: Yes
+```
+
+
+## d) Census
+### i) Cross tabs
+```{r}
+# 1. Cross tabs for Census Income (Group) 
+## a) Count & Percentage
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Census_Income_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() 
+# Parcel, Should Use? Maybe? (Residential)
+
+# 2. Cross tabs for HS Education Group by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Census_HS_Education_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() 
+# Parcel, Should Use? Yes? 
+
+# 3. Cross tabs for College Education Group by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Census_College_Education_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Parcel, Should Use? Yes
+
+# 4. Cross tabs for White Group by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Census_White_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Parcel, Should Use? Yes
+
+# 5. Cross tabs for Unemployment Group by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Census_Unemployment_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Parcel, Should Use? Yes
+
+# 6. Cross tabs for Poverty Group by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Census_Poverty_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Parcel, Should Use? Yes
+
+# 7. Cross tabs for Ownership Group by City
+Residential_Survival_Curve_Data |>
+  janitor::tabyl(Census_Ownership_Group, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns() # Adds the counts, too
+# Parcel, Should Use? Yes
+```
+
+### ii) Statistics
+#### A) Census, Income Group (IG) [Include: Yes]
+##### 1. Overall
+```{r}
+# 1. Creating [Income Group] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_IG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Income_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_IG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Income Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Income_Group, data = Overall_Survival_Curve_Data)
+# P-value: 2e-08 | Significant: Yes
+
+# 2. Creating [Total Value x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_TVG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Parcel_Total_Value_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_TVG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Income Group and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Parcel_Total_Value_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: <5e-11 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Total Value Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_IG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Income_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_IG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Incomee Group Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Income_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= 0.02 | Significant: Yes
+
+# 2. Creating [Total Value x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_IG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Income_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_IG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Income Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Income_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= 2e-16 | Significant: Yes
+```
+
+#### B) Census, HS Education Group (HSEG) [Include: Yes]
+##### 1. Overall
+```{r}
+# 1. Creating [HS Education Group] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_HSEG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_HS_Education_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_HSEG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "HS Education Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_HS_Education_Group, data = Overall_Survival_Curve_Data)
+# P-value: .06 | Significant: No
+
+# 2. Creating [HS Education Group x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_HSEG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_HS_Education_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_HSEG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "HS Education Groups and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_HS_Education_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: 8e-10 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [HS Education Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_HSEG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_HS_Education_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_HSEG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "HS Education Group Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_HS_Education_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= 0.01 | Significant: Yes
+
+# 2. Creating [Total Value x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_HSEG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_HS_Education_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_HSEG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "HS Education Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_HS_Education_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= 1e-15 | Significant: Yes
+
+```
+
+#### B) Census, College Education Group (CEG) [Include: Yes]
+##### 1. Overall
+```{r}
+# 1. Creating [College Education Group] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_CEG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_College_Education_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_CEG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "College Education Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_College_Education_Group, data = Overall_Survival_Curve_Data)
+# P-value: 1e-06 | Significant: Yes
+
+# 2. Creating [College Education Group x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_CEG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_College_Education_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_CEG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "College Education Groups and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_College_Education_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: 2e-12 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [College Education Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_CEG_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_College_Education_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_CEG_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "College Education Group Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_College_Education_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= 1e-04 | Significant: Yes
+
+# 2. Creating [Total Value x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_CEG_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_College_Education_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_CEG_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "College Education Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_College_Education_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= 9e-16 | Significant: Yes
+
+```
+
+
+Decided to create survivorship curves because of all of the previous
+effort done earlier. However, I understand there is no quantifiable
+significance here.
+
+
+#### C) Census, White Group [Include: Maybe?]
+High-percentage of white folk census block groups had a low survivorship rate overall; this could be because the program doesn't primarily focus on those areas specifically for the Greening the Gateway Cities
+
+##### 1. Overall
+```{r}
+# 1. Creating [White Group] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_White_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_White_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_White_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "White Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_White_Group, data = Overall_Survival_Curve_Data)
+# P-value: 0.4 | Significant: Yes
+
+# 2. Creating [White Group x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_White_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_White_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_White_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "White Groups and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_White_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: 6e-12 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [White Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_White_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_White_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_White_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "White Group Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_White_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= .05 | Significant: Yes 
+
+# 2. Creating [White x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_White_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_White_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_White_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "White Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_White_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= 1e-15 | Significant: Yes
+
+```
+
+#### D) Census, Poverty Group [Include: Yes]
+##### 1. Overall
+```{r}
+# 1. Creating [Poverty Group] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Poverty_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Poverty_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Poverty_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Poverty Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Poverty_Group, data = Overall_Survival_Curve_Data)
+# P-value: 2e-07 | Significant: Yes
+
+# 2. Creating [Poverty Group x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Poverty_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Poverty_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Poverty_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Poverty Groups and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Poverty_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: <2e-16 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Poverty Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Poverty_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Poverty_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Poverty_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Poverty Group Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Poverty_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= .002 | Significant: Yes 
+
+# 2. Creating [Poverty x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Poverty_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Poverty_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Poverty_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Poverty Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Poverty_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= <2e-16 | Significant: Yes
+
+```
+
+#### E) Census, Unemployed Group [Include: Yes]
+The unemployment rate seems to have the opposite effect, where low employment parcels tend to have higher survivorship; maybe the result of a few trees skewing the results. I need to soon map these out, soon
+##### 1. Overall
+```{r}
+# 1. Creating [Unemployed Group] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Unemployment_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Unemployment_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Unemployment_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Unemployment Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Unemployment_Group, data = Overall_Survival_Curve_Data)
+# P-value: 0.01 | Significant: Yes
+
+# 2. Creating [Unemployment Group x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Unemployment_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Unemployment_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Unemployment_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Unemployment Groups and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Unemployment_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: 2e-10 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Unemployment Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Unemployment_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Unemployment_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Unemployment_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Unemployment Group Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Unemployment_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= .001 | Significant: Yes 
+
+# 2. Creating [Unemployment x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Unemployment_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Unemployment_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Unemployment_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Unemployment Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Unemployment_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= <2e-16 | Significant: Yes
+```
+
+#### F) Census, Ownership Group [Include: Yes]
+##### 1. Overall
+```{r}
+# 1. Creating [Ownership Group] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Ownership_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Ownership_Group, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Ownership_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Ownership Groups Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Ownership_Group, data = Overall_Survival_Curve_Data)
+# P-value: 0.003 | Significant: Yes
+
+# 2. Creating [College Education Group x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Ownership_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Ownership_Group + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Ownership_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Ownership Groups and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Ownership_Group + City, data = Overall_Survival_Curve_Data)
+# P-value: 4e-11 | Significant: Yes
+```
+
+##### 2. Residential
+```{r}
+# 1. Creating [Ownership Groups] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Ownership_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Ownership_Group, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Ownership_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Ownership Group Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Ownership_Group, data = Residential_Survival_Curve_Data)
+# P-value: p= .02 | Significant: Yes 
+
+# 2. Creating [Ownership x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Residential_Ownership_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Census_Ownership_Group + City, data = Residential_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Residential_Ownership_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Ownership Group and City-Based Kaplan-Meier Curve for All Residential Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Census_Ownership_Group + City, data = Residential_Survival_Curve_Data)
+# P-value: p= 9e-16 | Significant: Yes
+
+```
+
+# 4. Data Analysis | Cox Proportional Hazard Models
+Final factors we want to look at for each
+Ecological:
+- Season Planted
+- Native
+- Growth Rate
+- Longevity
+
+Parcel:
+- Lot Size
+- Age
+- Total Value
+
+Census:
+- Median Household Income
+- HS Education
+- College Education
+- White Poverty
+- Unemployment
+- Ownership 
+
+## a) Baseline Model (City)
+```{r}
+# 1. Creating the Baseline Model (City)
+Residential_Baseline_CPH_Model <-
+  survival::coxph(
+    Surv(Time, Event) ~ City
+      , data = Residential_Survival_Curve_Data
+    )
+```
+
+## b) Yard Model 
+```{r}
+# 1. Creating the Yard Models
+Residential_Add_Yard_CPH_Model <-
+  survival::coxph(
+    Surv(Time, Event) ~ City + Yard
+      , data = Residential_Survival_Curve_Data
+    )
+Residential_Int_Yard_CPH_Model <-
+  survival::coxph(
+    Surv(Time, Event) ~ City*Yard
+      , data = Residential_Survival_Curve_Data
+    )
+
+# 2. Comparing Models
+performance::compare_performance(
+   Residential_Add_Yard_CPH_Model
+ , Residential_Int_Yard_CPH_Model
+ , rank = TRUE
+)
+# Results: Interaction is better
+
+# 3. Extracting the Values
+Residential_Int_Yard_CPH_Model |> broom::tidy()
+Residential_Int_Yard_CPH_Model |> ggeffects::ggpredict()
+
+# 4. Plotting the values
+Residential_Int_Yard_CPH_Model |> ggeffects::ggpredict() |> plot()
+  
+```
+
+ESM to DHL: The rest will be observed as additive instead of interaction to avoid overfitting
+
+## c) Ecological Model
+```{r}
+# 1. Creating the Ecological Baseline Model
+Residential_Add_Ecological_CPH_Model <-
+  survival::coxph(
+    Surv(Time, Event) ~ City + Ecological_Native_Status + Ecological_Growth_Rate +  Ecological_Longevity
+    , data = Residential_Survival_Curve_Data
+    )
+
+# 2. Extracting the Values
+Residential_Add_Ecological_CPH_Model |> broom::tidy()
+Residential_Add_Ecological_CPH_Model |> ggeffects::ggpredict()
+
+# 3. Plotting the variables
+## a) Listing out the factors
+Ecological_Factors <- c(
+      "Ecological_Native_Status"
+    , "Ecological_Growth_Rate"
+    , "Ecological_Longevity"
+        )
+
+## b) Separately, calculating the factor results for each
+Ecological_Models <- 
+  map_df(Ecological_Factors # Map df loops through each of the variables
+  , ~ ggeffects::ggpredict(Residential_Add_Ecological_CPH_Model, terms = .x) |>
+      mutate(variable = .x) # Adds the variable for each
+    ) |>
+  filter(!is.na(predicted)) # For some reason, this code is creating 12 empty rows, not sure why so removing them here to make sure the plotting words well
+
+## c) Plot with facets
+Ecological_Models |>
+  ggplot(aes(x = x, y = predicted)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1) +
+  facet_wrap(~ variable, scales = "free") +
+  labs(
+     x = "Predictor Level"
+   , y = "Predicted Survival (Relative Hazards/Risks)"
+   , title = "Predicted Survival by Ecological Factors"
+  ) +
+  theme_minimal(base_size = 14) +
+  NULL
+```
+
+## d) Parcel Baseline Model
+```{r}
+# 1. Creating the Parcel Baseline Model
+Residential_Add_Parcel_CPH_Model <-
+  survival::coxph(
+    Surv(Time, Event) ~ City + Parcel_Lot_Size + Parcel_Total_Value + Parcel_Year_Built
+      , data = Residential_Survival_Curve_Data |> mutate(Parcel_Year_Built = ifelse(Parcel_Year_Built == 0, NA_integer_, Parcel_Year_Built))
+    )
+
+# 2. Extracting the Values
+Residential_Add_Parcel_CPH_Model |> broom::tidy()
+Residential_Add_Parcel_CPH_Model |> ggeffects::ggpredict()
+
+# 3. Plotting the census variables
+## a) Since continuous, finding each one's quantile distribution
+### i) Census Median Household Income
+quantile(Residential_Survival_Curve_Data$Census_Median_Household_Income
+       , probs = c(0, 0.25, 0.5, 0.75, 1)
+       , na.rm = TRUE)
+
+Census_Median_Household_Income_Dist_Value <-
+  quantile(Residential_Survival_Curve_Data$Census_Median_Household_Income
+         , probs = c(0, 0.25, 0.5, 0.75, 1)
+         , na.rm = TRUE) |>
+  round(-3)
+
+Census_Median_Household_Income_Term <-
+  paste0("Census_Median_Household_Income ["
+       , paste(Census_Median_Household_Income_Dist_Value, collapse = ", ")
+       , "]")
+
+### ii) Census Percentage At Least High School
+quantile(Residential_Survival_Curve_Data$Census_Percentage_At_Least_High_School
+       , probs = c(0, 0.25, 0.5, 0.75, 1)
+       , na.rm = TRUE)
+
+Census_Percentage_At_Least_High_School_Dist_Value <-
+  quantile(Residential_Survival_Curve_Data$Census_Percentage_At_Least_High_School
+         , probs = c(0, 0.25, 0.5, 0.75, 1)
+         , na.rm = TRUE) |>
+  round(2)
+
+Census_Percentage_At_Least_High_School_Term <-
+  paste0("Census_Percentage_At_Least_High_School ["
+       , paste(Census_Percentage_At_Least_High_School_Dist_Value, collapse = ", ")
+       , "]")
+
+### iii) Census Percentage At Least College
+quantile(Residential_Survival_Curve_Data$Census_Percentage_At_Least_College
+       , probs = c(0, 0.25, 0.5, 0.75, 1)
+       , na.rm = TRUE)
+
+Census_Percentage_At_Least_College_Dist_Value <-
+  quantile(Residential_Survival_Curve_Data$Census_Percentage_At_Least_College
+         , probs = c(0, 0.25, 0.5, 0.75, 1)
+         , na.rm = TRUE) |>
+  round(2)
+
+Census_Percentage_At_Least_College_Term <-
+  paste0("Census_Percentage_At_Least_College ["
+       , paste(Census_Percentage_At_Least_College_Dist_Value, collapse = ", ")
+       , "]")
+
+### iv) Census Below Poverty Percentage
+quantile(Residential_Survival_Curve_Data$Census_Below_Poverty_Percentage
+       , probs = c(0, 0.25, 0.5, 0.75, 1)
+       , na.rm = TRUE)
+
+Census_Below_Poverty_Percentage_Dist_Value <-
+  quantile(Residential_Survival_Curve_Data$Census_Below_Poverty_Percentage
+         , probs = c(0, 0.25, 0.5, 0.75, 1)
+         , na.rm = TRUE) |>
+  round(2)
+
+Census_Below_Poverty_Percentage_Term <-
+  paste0("Census_Below_Poverty_Percentage ["
+       , paste(Census_Below_Poverty_Percentage_Dist_Value, collapse = ", ")
+       , "]")
+
+### v) Census Unemployed Percentage
+quantile(Residential_Survival_Curve_Data$Census_Unemployed_Percentage
+       , probs = c(0, 0.25, 0.5, 0.75, 1)
+       , na.rm = TRUE)
+
+Census_Unemployed_Percentage_Dist_Value <-
+  quantile(Residential_Survival_Curve_Data$Census_Unemployed_Percentage
+         , probs = c(0, 0.25, 0.5, 0.75, 1)
+         , na.rm = TRUE) |>
+  round(2)
+
+Census_Unemployed_Percentage_Term <-
+  paste0("Census_Unemployed_Percentage ["
+       , paste(Census_Unemployed_Percentage_Dist_Value, collapse = ", ")
+       , "]")
+
+### vi) Census Owner Occupied Percentage
+quantile(Residential_Survival_Curve_Data$Census_Owner_Occupied_Percentage
+       , probs = c(0, 0.25, 0.5, 0.75, 1)
+       , na.rm = TRUE)
+
+Census_Owner_Occupied_Percentage_Dist_Value <-
+  quantile(Residential_Survival_Curve_Data$Census_Owner_Occupied_Percentage
+         , probs = c(0, 0.25, 0.5, 0.75, 1)
+         , na.rm = TRUE) |>
+  round(2)
+
+Census_Owner_Occupied_Percentage_Term <-
+  paste0("Census_Owner_Occupied_Percentage ["
+       , paste(Census_Owner_Occupied_Percentage_Dist_Value, collapse = ", ")
+       , "]")
+
+## b) Calculating each one's predictors
+Census_Median_Household_Income_preds <-
+  ggeffects::ggpredict(
+    Residential_Add_Census_CPH_Model
+  , terms = Census_Median_Household_Income_Term
+  ) |>
+  mutate(variable = "Census_Median_Household_Income")
+
+Census_Percentage_At_Least_High_School_preds <-
+  ggeffects::ggpredict(
+    Residential_Add_Census_CPH_Model
+  , terms = Census_Percentage_At_Least_High_School_Term
+  ) |>
+  mutate(variable = "Census_Percentage_At_Least_High_School")
+
+Census_Percentage_At_Least_College_preds <-
+  ggeffects::ggpredict(
+    Residential_Add_Census_CPH_Model
+  , terms = Census_Percentage_At_Least_College_Term
+  ) |>
+  mutate(variable = "Census_Percentage_At_Least_College")
+
+Census_Below_Poverty_Percentage_preds <-
+  ggeffects::ggpredict(
+    Residential_Add_Census_CPH_Model
+  , terms = Census_Below_Poverty_Percentage_Term
+  ) |>
+  mutate(variable = "Census_Below_Poverty_Percentage")
+
+Census_Unemployed_Percentage_preds <-
+  ggeffects::ggpredict(
+    Residential_Add_Census_CPH_Model
+  , terms = Census_Unemployed_Percentage_Term
+  ) |>
+  mutate(variable = "Census_Unemployed_Percentage")
+
+Census_Owner_Occupied_Percentage_preds <-
+  ggeffects::ggpredict(
+    Residential_Add_Census_CPH_Model
+  , terms = Census_Owner_Occupied_Percentage_Term
+  ) |>
+  mutate(variable = "Census_Owner_Occupied_Percentage")
+
+Census_Models <-
+  bind_rows(
+     Census_Median_Household_Income_preds
+   , Census_Percentage_At_Least_High_School_preds
+   , Census_Percentage_At_Least_College_preds
+   , Census_Below_Poverty_Percentage_preds
+   , Census_Unemployed_Percentage_preds
+   , Census_Owner_Occupied_Percentage_preds
+  ) |>
+  filter(!is.na(x)) #Again, not sure why there are random NA rows.
+
+## c) Plotting with facets 
+Census_Models |>
+  ggplot(aes(x = x, y = predicted)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1) +
+  facet_wrap(~ variable, scales = "free") +
+  labs(
+     x = "Predictor Level"
+  ,  y = "Predicted Survival (Relative Hazards/Risks)"
+  ,  title = "Predicted Survival by Census Factors"
+  ) +
+  scale_x_continuous(labels = scales::label_comma()) +
+  theme_minimal(base_size = 14) +
+  NULL
+
+```
+
+
+## f) Comparing the models
+```{r}
+# 1. Comparing each of the models to see which is best
+performance::compare_performance(
+   Residential_Int_Yard_CPH_Model
+ , Residential_Add_Ecological_CPH_Model
+ , Residential_Add_Parcel_CPH_Model
+ , Residential_Add_Census_CPH_Model
+ , rank = TRUE
+) 
+
+# ESM to DHL: The best model seems to be the ecoloigcal one; however, this could be because of overfitting and overcomplicated tables from the other ones. I need to probably parse each theme a little bit more, but this is very interesting overall! Yard does not seem to be the most explanatory of the bunch.
+
+#ESM to DHl: What are the next steps? Is it to make the mega model of the best factors for each?
+```
+
+

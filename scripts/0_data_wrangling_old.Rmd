@@ -84,8 +84,8 @@ Outline of objectives
 
 # 1. Cleaning | Creating the standardized names to apply for the dataset
 Standard_Names <- c(
-  "Unique_ID","Property_ID","Location_ID","Building_Value_Adjusted_2023","Land_Value_Adjusted_2023","Other_Value_Adjusted_2023","Total_Value_Adjusted_2023",
-  "Year","Lot_Size","Lot_Date","Lot_Price_Adjusted_2023","Use_Code","Site_Address","Address_Number",
+  "Unique_ID","Property_ID","Location_ID","Building_Value","Land_Value","Other_Value","Total_Value",
+  "Year","Lot_Size","Lot_Date","Lot_Price","Use_Code","Site_Address","Address_Number",
   "Full_Street","Location","City","Zip","OWNER1","OWN_ADDR","OWN_CITY",
   "OWN_STATE","OWN_ZIP","OWN_CO","LS_BOOK","LS_PAGE","REG_ID","Zoning",
   "Year_Built","Building_Area","Units","Residential_Area","Style","Stories","Number_Rooms",
@@ -93,58 +93,70 @@ Standard_Names <- c(
 )
 
 # 2. Spatial & Categorical Data | Downloading the categorical and spatial data
-## a. Creating the Chelsea (2019) Shapefile
+## a. Creating the Chelsea (2019) Shapefile #LEAVE AS IS
 Chelsea_Property_Data_Append_Y2019 <-
     read_excel("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Assessments_All_Table_to_Excel.xlsx"
             , sheet = "Chelsea_2019"
-            , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
+            , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data | Rename to 2019 the value and get rid of the inflation adjusting
     setNames(Standard_Names) |>
     tidylog::select(1:18, 28:36,38) |>
-    mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
-                  Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
+    mutate(across(c(Building_Value, Land_Value, Other_Value, Total_Value,
+                  Lot_Size, Lot_Price, Year_Built, Building_Area,
                   Residential_Area, Units, Number_Rooms, Stories),
                 as.double)) |>
     mutate(across(Lot_Date, ymd)) |>
     mutate( 
-      Building_Value_Adjusted_2023 = Building_Value_Adjusted_2023*(326.016/281.082) # <- The value from inflation
-    , Land_Value_Adjusted_2023 = Land_Value_Adjusted_2023*(326.016/281.082)
-    , Other_Value_Adjusted_2023 = Other_Value_Adjusted_2023*(326.016/281.082)
-    , Total_Value_Adjusted_2023 = Total_Value_Adjusted_2023*(326.016/281.082)
-    , Lot_Price_Adjusted_2023 = Lot_Price_Adjusted_2023*(326.016/281.082)
+      Building_Value = Building_Value
+    , Land_Value = Land_Value
+    , Other_Value = Other_Value
+    , Total_Value = Total_Value
+    , Lot_Price = Lot_Price
     ) |>
   mutate(Year_Dataset = "2019") |>
   rename_with(~ paste0("Parcel_", .x)) |>
   mutate(Time_Period = "Time 1") |>
-  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price, Parcel_Building_Value, Parcel_Land_Value, Parcel_Other_Value, Parcel_Total_Value, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
       
 Chelsea_Property_Data_Y2019 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Chelsea_CY19_FY19/M057TaxPar_CY19_FY19.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
   tidylog::select(4, 13) |>
-  left_join(Chelsea_Property_Data_Append_Y2019, by = "Parcel_Location_ID") 
+  left_join(Chelsea_Property_Data_Append_Y2019, by = "Parcel_Location_ID")  |>
+  st_transform(crs = 26986)
 
 ## b. Creating the Chelsea (2023) Shapefile
+
 Chelsea_Property_Data_Append_Y2023 <-
     read_excel("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Assessments_All_Table_to_Excel.xlsx"
             , sheet = "Chelsea_2023"
             , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
     setNames(Standard_Names) |>
     tidylog::select(1:18, 28:36,38) |>
-    mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
-                  Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
+    mutate(across(c(Building_Value, Land_Value, Other_Value, Total_Value,
+                  Lot_Size, Lot_Price, Year_Built, Building_Area,
                   Residential_Area, Units, Number_Rooms, Stories),
                 as.double)) |>
+    mutate( 
+      Building_Value = Building_Value*(281.082/326.016)
+    , Land_Value = Land_Value*(281.082/326.016)
+    , Other_Value = Other_Value*(281.082/326.016)
+    , Total_Value = Total_Value*(281.082/326.016)
+    , Lot_Price = Lot_Price*(281.082/326.016)
+    ) |>
+# The value that I will do is *(326.016/281.082) #Update to this
     mutate(across(Lot_Date, ymd)) |>
     mutate(Year_Dataset = "2023") |>
    rename_with(~ paste0("Parcel_", .x)) |>
     mutate(Time_Period = "Time 2") |>
-  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price, Parcel_Building_Value, Parcel_Land_Value, Parcel_Other_Value, Parcel_Total_Value, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
 
 Chelsea_Property_Data_Y2023 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Chelsea_CY23_FY24/M057TaxPar_CY23_FY24.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
   tidylog::select(4, 13) |>
-  left_join(Chelsea_Property_Data_Append_Y2023, by = "Parcel_Location_ID") 
+  left_join(Chelsea_Property_Data_Append_Y2023, by = "Parcel_Location_ID") |>
+  st_transform(crs = 26986)
+  
   
 ## c. Creating the Holyoke (2019) Shapefile
 Holyoke_Property_Data_Append_Y2019 <-
@@ -153,28 +165,36 @@ Holyoke_Property_Data_Append_Y2019 <-
             , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
     setNames(Standard_Names) |>
     tidylog::select(1:18, 28:36,38) |>
-    mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
-                  Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
+    mutate(across(c(Building_Value, Land_Value, Other_Value, Total_Value,
+                  Lot_Size, Lot_Price, Year_Built, Building_Area,
                   Residential_Area, Units, Number_Rooms, Stories),
                 as.double)) |>
+   mutate( 
+      Building_Value = Building_Value
+    , Land_Value = Land_Value
+    , Other_Value = Other_Value
+    , Total_Value = Total_Value
+    , Lot_Price = Lot_Price
+    ) |>
     mutate(across(Lot_Date, ymd)) |>
     mutate(Year_Dataset = "2019") |>
     mutate( 
-      Building_Value_Adjusted_2023 = Building_Value_Adjusted_2023*(326.016/281.082) # <- The value from inflation
-    , Land_Value_Adjusted_2023 = Land_Value_Adjusted_2023*(326.016/281.082)
-    , Other_Value_Adjusted_2023 = Other_Value_Adjusted_2023*(326.016/281.082)
-    , Total_Value_Adjusted_2023 = Total_Value_Adjusted_2023*(326.016/281.082)
-    , Lot_Price_Adjusted_2023 = Lot_Price_Adjusted_2023*(326.016/281.082)
+      Building_Value = Building_Value # <- The value from inflation
+    , Land_Value = Land_Value #move the new stuff 
+    , Other_Value = Other_Value
+    , Total_Value = Total_Value
+    , Lot_Price = Lot_Price
     ) |>
   rename_with(~ paste0("Parcel_", .x)) |>
   mutate(Time_Period = "Time 1") |>
-  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price, Parcel_Building_Value, Parcel_Land_Value, Parcel_Other_Value, Parcel_Total_Value, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
       
 Holyoke_Property_Data_Y2019 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Holyoke_CY19_FY20/M137TaxPar_CY19_FY20.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
   tidylog::select(4, 13) |>
-  left_join(Holyoke_Property_Data_Append_Y2019, by = "Parcel_Location_ID") 
+  left_join(Holyoke_Property_Data_Append_Y2019, by = "Parcel_Location_ID")  |>
+  st_transform(crs = 26986)
 
 ## d. Creating the Holyoke (2023) Shapefile
 Holyoke_Property_Data_Append_Y2023 <-
@@ -183,21 +203,29 @@ Holyoke_Property_Data_Append_Y2023 <-
             , col_types = "text") |> #I need to make the col_type as text because I was having some issues from extracting the data into usable data 
    setNames(Standard_Names) |>
     tidylog::select(1:18, 28:36,38) |>
-    mutate(across(c(Building_Value_Adjusted_2023, Land_Value_Adjusted_2023, Other_Value_Adjusted_2023, Total_Value_Adjusted_2023,
-                  Lot_Size, Lot_Price_Adjusted_2023, Year_Built, Building_Area,
+    mutate(across(c(Building_Value, Land_Value, Other_Value, Total_Value,
+                  Lot_Size, Lot_Price, Year_Built, Building_Area,
                   Residential_Area, Units, Number_Rooms, Stories),
                 as.double)) |>
+     mutate( 
+      Building_Value = Building_Value*(281.082/326.016)
+    , Land_Value = Land_Value*(281.082/326.016)
+    , Other_Value = Other_Value*(281.082/326.016)
+    , Total_Value = Total_Value*(281.082/326.016)
+    , Lot_Price = Lot_Price*(281.082/326.016)
+    ) |>
     mutate(across(Lot_Date, ymd)) |>
     mutate(Year_Dataset = "2023") |>
     rename_with(~ paste0("Parcel_", .x)) |>
     mutate(Time_Period = "Time 2") |>
-  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price_Adjusted_2023, Parcel_Building_Value_Adjusted_2023, Parcel_Land_Value_Adjusted_2023, Parcel_Other_Value_Adjusted_2023, Parcel_Total_Value_Adjusted_2023, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
+  tidylog::select(Parcel_Unique_ID, Parcel_Property_ID, Parcel_Location_ID, Parcel_Lot_Size, Parcel_Lot_Date, Parcel_Lot_Units, Parcel_Lot_Price, Parcel_Building_Value, Parcel_Land_Value, Parcel_Other_Value, Parcel_Total_Value, Parcel_Year, Parcel_Style, Parcel_Use_Code, Parcel_Zoning, Parcel_Year_Built, Parcel_Building_Area, Parcel_Residential_Area, Parcel_Units, Parcel_Number_Rooms, Parcel_Stories, Time_Period, Parcel_Year_Dataset)
 
 Holyoke_Property_Data_Y2023 <-
   st_read("../HERO_front_backyard_data_to_big/Parcel_Data_Sites_Years/Parcel_Data_Holyoke_CY23_FY23/M137TaxPar_CY23_FY23.shp") |>
   rename(Parcel_Location_ID = LOC_ID) |>
   tidylog::select(4, 13) |>
-  left_join(Holyoke_Property_Data_Append_Y2023, by = "Parcel_Location_ID") 
+  left_join(Holyoke_Property_Data_Append_Y2023, by = "Parcel_Location_ID") |>
+  st_transform(crs = 26986)
 
 ```
 
@@ -205,48 +233,47 @@ Holyoke_Property_Data_Y2023 <-
 ```{r Census Data for Holyoke, MA and Chelsea, MA, echo=FALSE, message=FALSE}
 # 0. Archived: Census and Address Code for Geopackages # Refer to this
 
-# 1. Reading CBGs in 2017 and 2023 in Holyoke, MA and Chelsea, MA
-Massachusetts_CBG_Data_Y2017 <-
-st_read("input_data/General/Massachusetts_CBG_Data_Y2017.gpkg")
-
-Massachusetts_CBG_Data_Y2023 <-
-st_read("input_data/General/Massachusetts_CBG_Data_Y2023.gpkg")
+# 1. Reading CBGs in 2022 for General Analysis
+Massachusetts_CBG_Data_Y2022 <-
+  st_read("input_data/General/Massachusetts_CBG_Data_Y2022.gpkg")
 
 # 2. Reading Holyoke, MA and Chelsea, MA boundaries 
 ## a. Reading the Holyoke boundary
 Holyoke_Boundary <-
   st_read("input_data/Holyoke/Boundaries/holyoke_boundary.gpkg") |>
-  st_transform(st_crs(Massachusetts_CBG_Data_Y2017)) # They both have the same projections so it doesn't matter
+  st_transform(st_crs(Massachusetts_CBG_Data_Y2022)) # They both have the same projections so it doesn't matter
 
 ## b. Reading the Chelsea boundary
 Chelsea_Boundary <-
   st_read("input_data/Chelsea/Boundaries/chelsea_boundary.gpkg") |>
-  st_transform(st_crs(Massachusetts_CBG_Data_Y2017)) # Likewise, they both have the same projections so it shouldn't matter
+  st_transform(st_crs(Massachusetts_CBG_Data_Y2022)) # Likewise, they both have the same projections so it shouldn't matter
+
+#-# ESM to DHL: Technically, no need to this separaetly for each year for the CBGs. However, to not break the code, decided to keep as is for simplicity sake. 
 
 # 3. Sub selecting the Holyoke, MA and Chelsea, MA specific block 
 ## b. Figuring this out for Chelsea Y2017
 Chelsea_CBG_Data_Y2017 <-
-  Massachusetts_CBG_Data_Y2017[
-  st_intersects(Massachusetts_CBG_Data_Y2017, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
+  Massachusetts_CBG_Data_Y2022[
+  st_intersects(Massachusetts_CBG_Data_Y2022, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
   filter(!Census_GEOID %in% c("250173424023", "250173424024", "250173426002", "250173421014",
       "250173421013", "250251701023", "250251701013", "250251706012"
       , "250173424004", "250251701003", "250251701006" #These three need to be added for 2017 for some reasons
       )) |>
-  st_transform(st_crs(Chelsea_Property_Data_Y2019)) 
+  st_transform(st_crs(Massachusetts_CBG_Data_Y2022)) 
 
 ## b. Figuring this out for Chelsea Y2023
 Chelsea_CBG_Data_Y2023 <-
-  Massachusetts_CBG_Data_Y2023[
-  st_intersects(Massachusetts_CBG_Data_Y2023, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
+  Massachusetts_CBG_Data_Y2022[
+  st_intersects(Massachusetts_CBG_Data_Y2022, Chelsea_Boundary, sparse = FALSE)[, 1], ] |>
   filter(!Census_GEOID %in% c("250173424023", "250173424024", "250173426002", "250173421014",
       "250173421013", "250251701023", "250251701013", "250251706012")) |> # Could also use %nin%
-  st_transform(st_crs(Chelsea_Property_Data_Y2023)) 
+  st_transform(st_crs(Massachusetts_CBG_Data_Y2022)) 
   
 #-# Double checked both of these: they seem good above!
 ## c. Figuring this out for Holyoke Y2017
 Holyoke_CBG_Data_Y2017 <-
-  Massachusetts_CBG_Data_Y2017[
-  st_intersects(Massachusetts_CBG_Data_Y2017, Holyoke_Boundary, sparse = FALSE)[, 1],
+  Massachusetts_CBG_Data_Y2022[
+  st_intersects(Massachusetts_CBG_Data_Y2022, Holyoke_Boundary, sparse = FALSE)[, 1],
 ] |>
   filter(!Census_GEOID %in% c(
     "250138122021", "250138111023", "250138111022", "250138111021",
@@ -256,12 +283,12 @@ Holyoke_CBG_Data_Y2017 <-
     "250138125004", "250158224012", "250158214004"
     , "250138122022" #This one needed to be added for 2017 for some reasons
   )) |>
-  st_transform(st_crs(Holyoke_Property_Data_Y2019))
+  st_transform(st_crs(Massachusetts_CBG_Data_Y2022))
 
 ## c. Figuring this out for Holyoke Y2023
 Holyoke_CBG_Data_Y2023 <-
-  Massachusetts_CBG_Data_Y2023[
-  st_intersects(Massachusetts_CBG_Data_Y2023, Holyoke_Boundary, sparse = FALSE)[, 1],
+  Massachusetts_CBG_Data_Y2022[
+  st_intersects(Massachusetts_CBG_Data_Y2022, Holyoke_Boundary, sparse = FALSE)[, 1],
 ] |>
   filter(!Census_GEOID %in% c(
     "250138122021", "250138111023", "250138111022", "250138111021",
@@ -270,8 +297,7 @@ Holyoke_CBG_Data_Y2023 <-
     "250158211012", "250158213003", "250158223001", "250158225004",
     "250138125004", "250158224012", "250158214004"
   )) |>
-  st_transform(st_crs(Holyoke_Property_Data_Y2023)) 
-
+  st_transform(st_crs(Massachusetts_CBG_Data_Y2022)) 
 ```
 
 # 3. Preliminary Giveaway Data: Cleaning and making it ready for the survivorship study for Holyoke, MA and Chelsea, MA (2017 and 2024)
@@ -766,12 +792,10 @@ Pre_Parcel_Data_Y2023 <-
   filter(!is.na(Parcel_Unique_ID))
 
 Pre_Census_Data_Y2017 <- 
-  bind_rows(Holyoke_CBG_Data_Y2017, Chelsea_CBG_Data_Y2017) |>
-  tidylog::select(-Time_Period) 
+  bind_rows(Holyoke_CBG_Data_Y2017, Chelsea_CBG_Data_Y2017) 
 
 Pre_Census_Data_Y2023 <- 
-  bind_rows(Holyoke_CBG_Data_Y2023, Chelsea_CBG_Data_Y2023) |>
-  tidylog::select(-Time_Period) 
+  bind_rows(Holyoke_CBG_Data_Y2023, Chelsea_CBG_Data_Y2023) 
 
 ## b. Calculating each giveaway and choosing the largest polygon
 ### i) Finding for parcels, which is more challenging since not all are within
@@ -1086,7 +1110,6 @@ Final_Giveaway_Y2017_Y2024 <-
 # , Comment_Survey                               
 , Survey_Year_Dataset                          
 , Parcel_Year_Dataset                          
-, Census_Year_Dataset                          
 , Parcel_Location_ID                           
 # , Parcel_Unique_ID                             
 # , Parcel_Property_ID                           
@@ -1100,11 +1123,11 @@ Final_Giveaway_Y2017_Y2024 <-
 , Parcel_Lot_Date                              
 , Parcel_Lot_Size                              
 # , Parcel_Lot_Units                             
-, Parcel_Lot_Price_Adjusted_2023               
-, Parcel_Building_Value_Adjusted_2023          
-, Parcel_Land_Value_Adjusted_2023              
-, Parcel_Other_Value_Adjusted_2023             
-, Parcel_Total_Value_Adjusted_2023             
+, Parcel_Lot_Price               
+, Parcel_Building_Value          
+, Parcel_Land_Value              
+, Parcel_Other_Value             
+, Parcel_Total_Value             
 , Parcel_Year                                  
 , Parcel_Style                                 
 , Parcel_Use_Code                              
@@ -1120,7 +1143,7 @@ Final_Giveaway_Y2017_Y2024 <-
 , Census_Tract                                 
 , Census_County                                
 , Census_State                                 
-, Census_Median_Household_Income_Adjusted_2023 
+, Census_Median_Household_Income 
 , Census_Total_Population                      
 , Census_Households       
 , Census_Ethnicity_Population
@@ -1148,8 +1171,8 @@ Final_Giveaway_Y2017_Y2024 <-
 , Census_Unemployed_Percentage
 , Census_Median_Age                            
 , Census_Total_Population_Over_25              
-, Census_Median_Gross_Rent_Adjusted_2023                     
-, Census_Median_Home_Value_Adjusted_2023  
+, Census_Median_Gross_Rent                     
+, Census_Median_Home_Value  
 , Census_Tenure_Population
 , Census_Owner_Occupied                        
 , Census_Renter_Occupied   
@@ -1172,12 +1195,11 @@ Final_Giveaway_Y2017_Y2024 <-
   , Parcel_Year = as.integer(Parcel_Year)
   , Survey_Year_Dataset = as.integer(Survey_Year_Dataset)
   , Parcel_Year_Dataset  = as.integer(Parcel_Year_Dataset)
-  , Census_Year_Dataset  = as.integer(Census_Year_Dataset)
   ) |>
   mutate(Identifier = paste0(City, "_", Unique_ID)) |>
   rename(Ecological_Native_Status = Native_Status
         , Ecological_Deciduous_Evergreen = Deciduous_Evergreen) |>
-  tidylog::select(106, 1:105)
+  tidylog::select(105, 1:104)
 
 
 Final_Giveaway_Y2017_Y2024 |>
@@ -1283,6 +1305,7 @@ Final_Giveaway_Y2017_Y2024 |>
 
 ## b) Double checking missignness with mortality
 ```{r}
+# 1. Figuring out total missing mortality 
 Final_Giveaway_Y2017_Y2024 |> 
   mutate(Mortality_Status = case_when(
     Mortality_Status %in% c("Removed","Standing Dead","Stump") ~ "Dead"
@@ -1290,6 +1313,26 @@ Final_Giveaway_Y2017_Y2024 |>
   , TRUE ~ Mortality_Status ) )|> #John: Confirm why there would be an NA; they got the planting records from the city and went to a random sub-set; did not have the human-power to go to all of them. They have the lat-long, and the species, and the date, and they weren't able to add their own data from HERO. 
   st_drop_geometry() |>
   tabyl(City, Time_Period, Mortality_Status) # This is the issue <- there are SO many NAs in 2017; checked the original data, and it has the same finding. Thus, survivorship becomes challenging to determine and gives the false sense of high survivorship rate. That is the issue currently with the data. But still, pretty interesting
+
+# 2. Figuring out total missing mortality 
+## a) Chelsea
+sum(!is.na(Pre_Chelsea_Giveaways$M_17) & !is.na(Pre_Chelsea_Giveaways$M_24))
+
+table(
+  "2017" = !is.na(Pre_Chelsea_Giveaways$M_17),
+  "2024" = !is.na(Pre_Chelsea_Giveaways$M_24)
+) # 385 we have for Chelsea
+
+## b) Holyoke
+sum(!is.na(Pre_Holyoke_Giveaways$M_17) & !is.na(Pre_Holyoke_Giveaways$M_24))
+
+table(
+  "2017" = !is.na(Pre_Holyoke_Giveaways$M_17),
+  "2024" = !is.na(Pre_Holyoke_Giveaways$M_24) 
+) # 276 we have for Holyoke; weird, very small; also 7 there that never existed
+
+
+
 ```
 
 ## c) Checking Other
@@ -1349,26 +1392,16 @@ temp_Pre_V1_Giveaway_Y2017_Y2024 <-
 # 7. Archived: Census and Address Code for Geopackages 
 ```{r echo=TRUE, Archived Data Wrangling eval=FALSE}
 #------INSERT IN CHAPTER 2. CENSUS DATA | STEP 0 ------# 
-# --- Running Notes --- #
-# For the inflation data, U.S. Bureau Labor of Statistics was used, particularly from the years 2017 and 2023 to be able to get the value needed for comparisons: https://www.bls.gov/regions/northeast/data/consumerpriceindex_boston_table.htm
-# I wanted to continue having the same principle here
-# --------------------- #
-
-# 1. Loading the list of variables from ACS of 2017 & 2024
-## a. Listing the 2017 variable data
-Variables_ACS_Y2017 <-
-  tidycensus::load_variables('acs5', year = 2017) |>
+# 1. Loading the list of variables from ACS of 2022
+## b. Listing the 2022 variable data
+Variables_ACS_Y2022 <-
+  tidycensus::load_variables('acs5', year = 2022) |>
   filter(geography == "block group")
 
-## b. Listing the 2023 variable data
-Variables_ACS_Y2023 <-
-  tidycensus::load_variables('acs5', year = 2021) |>
-  filter(geography == "block group")
-
-# 2. Selecting the variables of ACS of 2017 & 2023
-## a. Choosing the 2017 & 2023 variables | EM: Double-checked and seems Y2017 & Y2023 are the same
+# 2. Selecting the variables of ACS of 2022
+## a. Selecting the 2022 variables
 My_Vars <-
-  c('Median_Household_Income_Adjusted_2023' = 'B19013_001'
+  c('Median_Household_Income'               = 'B19013_001'
   , 'Total_Population'                      = 'B01003_001'
   , 'Households'                            = 'B11001_001'
   , 'Ethnicity_Population'                  = 'B03002_001'
@@ -1395,75 +1428,21 @@ My_Vars <-
   , 'ed_plus_Master_Degree'                 = 'B15003_023'
   , 'ed_plus_Professional_Degree'           = 'B15003_024'
   , 'ed_plus_Doctorate_Degree'              = 'B15003_025'
-  , 'Median_Gross_Rent_Adjusted_2023'       = 'B25064_001'
-  , 'Median_Home_Value_Adjusted_2023'       = 'B25077_001' 
+  , 'Median_Gross_Rent'                     = 'B25064_001'
+  , 'Median_Home_Value'                     = 'B25077_001' 
   , 'Tenure_Population'                     = 'B25003_001'
   , 'Owner_Occupied'                        = 'B25003_002'
   , 'Renter_Occupied'                       = 'B25003_003'
       )
 
 # 3. Selecting the variables of ACS of 2017 & 2023
-## a. Downloading the Y2017 Census Data 
-Massachusetts_CBG_Data_Y2017 <-
+## b. Downloading the Y2022 Census Data
+Massachusetts_CBG_Data_Y2022 <-
   tidycensus::get_acs(
       geography = 'block group'
     , state = 'Massachusetts'
     , variables = My_Vars           
-    , year = 2017
-    , geometry = TRUE
-    , output = 'wide'
-    , moe_level = 95
-    ) |>
-    tidylog::select(-dplyr::ends_with('M')) |>
-    tidylog::rename_with(~ gsub('E$', '', .x), dplyr::ends_with('E')) |>
-    rename(NAME = NAM) |>
-    tidyr::separate( 
-        NAME
-      , into = c('Block', 'Tract', 'County', 'State')
-      , sep  = ', '
-      ) |> 
-    tidylog::mutate(
-      Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
-    , Percentage_At_Least_High_School =
-        rowSums(dplyr::across(dplyr::starts_with('ed_')), na.rm = TRUE) /
-        Total_Population_Over_25
-    , Percentage_At_Least_College =
-        rowSums(dplyr::across(dplyr::starts_with('ed_plus')), na.rm = TRUE) /
-        Total_Population_Over_25
-    ) |>
-    mutate(Median_Household_Income_Adjusted_2023 = Median_Household_Income_Adjusted_2023*(326.016/267.033)
-          , Median_Gross_Rent_Adjusted_2023 = Median_Gross_Rent_Adjusted_2023*(326.016/267.033)
-          , Median_Home_Value_Adjusted_2023 = Median_Home_Value_Adjusted_2023*(326.016/267.033)) |>
-    mutate(White_Alone_Percentage = (White_Alone/Ethnicity_Population)
-         , Black_Alone_Percentage = (Black_Alone/Ethnicity_Population)
-         , American_Indian_Alone_Percentage = (American_Indian_Alone/Ethnicity_Population)
-         , Asian_Alone_Percentage = (Asian_Alone/Ethnicity_Population)
-         , Native_Hawaiian_Alone_Percentage = (Native_Hawaiian_Alone/Ethnicity_Population)
-         , Other_Alone_Percentage = (Other_Alone/Ethnicity_Population)
-         , Two_or_More_Alone_Percentage = (Two_or_More_Alone/Ethnicity_Population)
-         , Hispanic_Alone_Percentage = (Hispanic_Alone/Ethnicity_Population)
-         , Below_Poverty_Percentage = (Below_Poverty/Poverty_Population)
-         , Unemployed_Percentage = (Unemployed/Labor_Population)
-         , Owner_Occupied_Percentage = (Owner_Occupied/Tenure_Population)
-         , Renter_Occupied_Percentage = (Renter_Occupied/Tenure_Population)
-         ) |>
-    tidylog::select(-dplyr::starts_with('ed_')) |>
-    mutate(Year_Dataset = "2017") |>
-    rename_with(~ paste0("Census_", .x)
-              ,  .cols = -any_of("geometry")) |> #Making sure geometry doesn't change name
-    mutate(Time_Period = "Time 1") 
-
-### i) Writing this out 
-Massachusetts_CBG_Data_Y2017 |>
-  st_write("input_data/General/Massachusetts_CBG_Data_Y2017.gpkg")
-
-## b. Downloading the Y2023 Census Data
-Massachusetts_CBG_Data_Y2023 <-
-  tidycensus::get_acs(
-      geography = 'block group'
-    , state = 'Massachusetts'
-    , variables = My_Vars           
-    , year = 2023
+    , year = 2022
     , geometry = TRUE
     , output = 'wide'
     , moe_level = 95
@@ -1474,7 +1453,7 @@ Massachusetts_CBG_Data_Y2023 <-
     tidyr::separate( 
         NAME
       , into = c('Block', 'Tract', 'County', 'State')
-      , sep  = '; ' # The delimiter for 2023 was for some reason different?
+      , sep  = '; ' #
       ) |> 
     tidylog::mutate(
       Total_Population_Over_25 = dplyr::na_if(Total_Population_Over_25, 0)
@@ -1499,14 +1478,13 @@ Massachusetts_CBG_Data_Y2023 <-
          , Renter_Occupied_Percentage = (Renter_Occupied/Tenure_Population)
          ) |>
     tidylog::select(-dplyr::starts_with('ed_')) |>
-    mutate(Year_Dataset = "2023") |>
     rename_with(~ paste0("Census_", .x)
               ,  .cols = -any_of("geometry")) |>
-    mutate(Time_Period = "Time 2") 
+    st_transform(crs = 26986)
 
 ### i) Writing this out 
-Massachusetts_CBG_Data_Y2023 |>
-  st_write("input_data/General/Massachusetts_CBG_Data_Y2023.gpkg")
+Massachusetts_CBG_Data_Y2022 |>
+  st_write("input_data/General/Massachusetts_CBG_Data_Y2022.gpkg")
 
 #------INSERT IN CHAPTER 3. ADDRESS DATA | STEP 0 ------# 
 ### iv) Finding all the Addresses that Need Appending
