@@ -2406,7 +2406,7 @@ Census:
 ## a) Baseline Model (City)
 ```{r}
 # 1. Creating the Baseline Model (City)
-Residential_Baseline_CPH_Model <-
+Baseline_Residential_CPH_Model <-
   survival::coxph(
     Surv(Time, Event) ~ City
       , data = Residential_Survival_Curve_Data
@@ -2418,12 +2418,13 @@ ls(pattern = 'KM_Model') #ESM to DHL: What does this do?
 ## b) Yard Model 
 ```{r}
 # 1. Creating the Yard Models
-Residential_Add_Yard_CPH_Model <-
+Yard_Residential_Add_CPH_Model <-
   survival::coxph(
     Surv(Time, Event) ~ City + Yard
       , data = Residential_Survival_Curve_Data
     )
-Residential_Int_Yard_CPH_Model <-
+
+Yard_Residential_Int_CPH_Model <-
   survival::coxph(
     Surv(Time, Event) ~ City*Yard
       , data = Residential_Survival_Curve_Data
@@ -2431,259 +2432,144 @@ Residential_Int_Yard_CPH_Model <-
 
 # 2. Comparing Models
 performance::compare_performance(
-   Residential_Add_Yard_CPH_Model
- , Residential_Int_Yard_CPH_Model
+   Yard_Residential_Add_CPH_Model
+ , Yard_Residential_Int_CPH_Model
  , rank = TRUE
 )
 # Results: Interaction is better
 
 # 3. Extracting the Values
-Residential_Int_Yard_CPH_Model |> broom::tidy()
-Residential_Int_Yard_CPH_Model |> ggeffects::ggpredict()
+Yard_Residential_Int_CPH_Model |> broom::tidy()
+Yard_Residential_Int_CPH_Model |> ggeffects::ggpredict()
 
 # 4. Plotting the values
-Residential_Int_Yard_CPH_Model |> ggeffects::ggpredict() |> plot()
+Yard_Residential_Int_CPH_Model |> ggeffects::ggpredict() |> plot()
   
 ```
 
-ESM to DHL: The rest will be observed as additive instead of interaction to avoid overfitting
-[how can over-fitting be assessed at this stage?]
-
 ## c) Ecological Model
+Ecological:
+- Season Planted
+- Native Status
+- Growth Rate
+- Longevity
+- Size Classes
+
+### i) Specific Variables
 ```{r}
-# DHL here, I was thinking instead of all of the ecological variables in one model, one model for each to see which one fits best 
+# 1. Checking each of the variables
+## a) Season Planted (SP)
+Ecological_Residential_SP_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Season_Planted
+    , data = Residential_Survival_Curve_Data
+  )
 
-# ESM to DHL: This makes sense! I can do, like both, for each
-
-eco_1 <- 
+## b) Native Status (NS)
+Ecological_Residential_NS_CPH_Model <- 
   survival::coxph(
     Surv(Time, Event) ~ Ecological_Native_Status
     , data = Residential_Survival_Curve_Data
   )
-    
-eco_2 <-
+
+## c) Growth Rate (GR)
+Ecological_Residential_GR_CPH_Model <- 
   survival::coxph(
-    Surv(Time, Event) ~ Ecological_Growth_Rate
+    Surv(Time, Event) ~ Ecological_Native_Status
     , data = Residential_Survival_Curve_Data
   )
-    
-eco_3 <- 
+
+## d) Longevity 
+Ecological_Residential_Longevity_CPH_Model <- 
   survival::coxph(
     Surv(Time, Event) ~ Ecological_Longevity
     , data = Residential_Survival_Curve_Data
   )
 
-performance::compare_performance(eco_1, eco_2, eco_3, rank = TRUE) # longevity
-
-# 1. Creating the Ecological Baseline Model
-Residential_Add_Ecological_CPH_Model <-
+## d) Size Classes (Height Maturity [HM])
+Ecological_Residential_HM_CPH_Model <- 
   survival::coxph(
-    Surv(Time, Event) ~ City + Ecological_Native_Status + Ecological_Growth_Rate +  Ecological_Longevity
+    Surv(Time, Event) ~ Ecological_Height_Maturity
+    , data = Residential_Survival_Curve_Data
+  )
+
+# 2. Comparing the Model
+performance::compare_performance(
+  Ecological_Residential_SP_CPH_Model
+, Ecological_Residential_NS_CPH_Model
+, Ecological_Residential_GR_CPH_Model
+, Ecological_Residential_Longevity_CPH_Model
+, Ecological_Residential_HM_CPH_Model
+, rank = TRUE)
+
+# 3. Results
+## Based off of the AIC weight, 
+### - Longevity
+### - Tree Height at Maturity 
+## should be used as they are the best predictors.
+```
+
+### ii) Full Selected Model
+```{r}
+# 1. Creating the Ecological Baseline Model
+Ecological_Residential_CPH_Model <-
+  survival::coxph(
+    Surv(Time, Event) ~ City + Ecological_Longevity +  Ecological_Height_Maturity
     , data = Residential_Survival_Curve_Data
     )
 
 # 2. Extracting the Values
-Residential_Add_Ecological_CPH_Model |> broom::tidy()
-Residential_Add_Ecological_CPH_Model |> ggeffects::ggpredict()
+Ecological_Residential_CPH_Model |> broom::tidy()
+Ecological_Residential_CPH_Model |> ggeffects::ggpredict()
 
 # 3. Plotting the variables
-## a) Listing out the factors
-Ecological_Factors <- c(
-      "Ecological_Native_Status"
-    , "Ecological_Growth_Rate"
-    , "Ecological_Longevity"
-        )
-
-## b) Separately, calculating the factor results for each
-Ecological_Models <- 
-  map_df(Ecological_Factors # Map df loops through each of the variables
-  , ~ ggeffects::ggpredict(Residential_Add_Ecological_CPH_Model, terms = .x) |>
-      mutate(variable = .x) # Adds the variable for each
-    ) |>
-  filter(!is.na(predicted)) # For some reason, this code is creating 12 empty rows, not sure why so removing them here to make sure the plotting words well
-
-## c) Plot with facets
-Ecological_Models |>
-  ggplot(aes(x = x, y = predicted)) +
-  geom_point(size = 2) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1) +
-  facet_wrap(~ variable, scales = "free") +
-  labs(
-     x = "Predictor Level"
-   , y = "Predicted Survival (Relative Hazards/Risks)"
-   , title = "Predicted Survival by Ecological Factors"
-  ) +
-  theme_minimal(base_size = 14) +
-  NULL
-```
-
-## d) Parcel Baseline Model
-```{r}
-# 1. Creating the Parcel Baseline Model
-Residential_Add_Parcel_CPH_Model <-
-  survival::coxph(
-    Surv(Time, Event) ~ City + Parcel_Lot_Size + Parcel_Total_Value + Parcel_Year_Built
-      , data = Residential_Survival_Curve_Data |> mutate(Parcel_Year_Built = ifelse(Parcel_Year_Built == 0, NA_integer_, Parcel_Year_Built))
-    )
-
-# 2. Extracting the Values
-Residential_Add_Parcel_CPH_Model |> broom::tidy()
-Residential_Add_Parcel_CPH_Model |> ggeffects::ggpredict()
-
-# 3. Plotting the census variables
-## a) Since continuous, finding each one's quantile distribution
-### i) Census Median Household Income
-quantile(Residential_Survival_Curve_Data$Census_Median_Household_Income
+## a) Calculating the values for the continuous variables
+quantile(Residential_Survival_Curve_Data$Ecological_Height_Maturity
        , probs = c(0, 0.25, 0.5, 0.75, 1)
        , na.rm = TRUE)
 
-Census_Median_Household_Income_Dist_Value <-
-  quantile(Residential_Survival_Curve_Data$Census_Median_Household_Income
-         , probs = c(0, 0.25, 0.5, 0.75, 1)
-         , na.rm = TRUE) |>
-  round(-3)
-
-Census_Median_Household_Income_Term <-
-  paste0("Census_Median_Household_Income ["
-       , paste(Census_Median_Household_Income_Dist_Value, collapse = ", ")
-       , "]")
-
-### ii) Census Percentage At Least High School
-quantile(Residential_Survival_Curve_Data$Census_Percentage_At_Least_High_School
-       , probs = c(0, 0.25, 0.5, 0.75, 1)
-       , na.rm = TRUE)
-
-Census_Percentage_At_Least_High_School_Dist_Value <-
-  quantile(Residential_Survival_Curve_Data$Census_Percentage_At_Least_High_School
+Ecological_Height_Maturity_Dist_Value <-
+  quantile(Residential_Survival_Curve_Data$Ecological_Height_Maturity
          , probs = c(0, 0.25, 0.5, 0.75, 1)
          , na.rm = TRUE) |>
   round(2)
 
-Census_Percentage_At_Least_High_School_Term <-
-  paste0("Census_Percentage_At_Least_High_School ["
-       , paste(Census_Percentage_At_Least_High_School_Dist_Value, collapse = ", ")
+Ecological_Height_Maturity_Term <-
+  paste0("Ecological_Height_Maturity ["
+       , paste(Ecological_Height_Maturity_Dist_Value, collapse = ", ")
        , "]")
 
-### iii) Census Percentage At Least College
-quantile(Residential_Survival_Curve_Data$Census_Percentage_At_Least_College
-       , probs = c(0, 0.25, 0.5, 0.75, 1)
-       , na.rm = TRUE)
-
-Census_Percentage_At_Least_College_Dist_Value <-
-  quantile(Residential_Survival_Curve_Data$Census_Percentage_At_Least_College
-         , probs = c(0, 0.25, 0.5, 0.75, 1)
-         , na.rm = TRUE) |>
-  round(2)
-
-Census_Percentage_At_Least_College_Term <-
-  paste0("Census_Percentage_At_Least_College ["
-       , paste(Census_Percentage_At_Least_College_Dist_Value, collapse = ", ")
-       , "]")
-
-### iv) Census Below Poverty Percentage
-quantile(Residential_Survival_Curve_Data$Census_Below_Poverty_Percentage
-       , probs = c(0, 0.25, 0.5, 0.75, 1)
-       , na.rm = TRUE)
-
-Census_Below_Poverty_Percentage_Dist_Value <-
-  quantile(Residential_Survival_Curve_Data$Census_Below_Poverty_Percentage
-         , probs = c(0, 0.25, 0.5, 0.75, 1)
-         , na.rm = TRUE) |>
-  round(2)
-
-Census_Below_Poverty_Percentage_Term <-
-  paste0("Census_Below_Poverty_Percentage ["
-       , paste(Census_Below_Poverty_Percentage_Dist_Value, collapse = ", ")
-       , "]")
-
-### v) Census Unemployed Percentage
-quantile(Residential_Survival_Curve_Data$Census_Unemployed_Percentage
-       , probs = c(0, 0.25, 0.5, 0.75, 1)
-       , na.rm = TRUE)
-
-Census_Unemployed_Percentage_Dist_Value <-
-  quantile(Residential_Survival_Curve_Data$Census_Unemployed_Percentage
-         , probs = c(0, 0.25, 0.5, 0.75, 1)
-         , na.rm = TRUE) |>
-  round(2)
-
-Census_Unemployed_Percentage_Term <-
-  paste0("Census_Unemployed_Percentage ["
-       , paste(Census_Unemployed_Percentage_Dist_Value, collapse = ", ")
-       , "]")
-
-### vi) Census Owner Occupied Percentage
-quantile(Residential_Survival_Curve_Data$Census_Owner_Occupied_Percentage
-       , probs = c(0, 0.25, 0.5, 0.75, 1)
-       , na.rm = TRUE)
-
-Census_Owner_Occupied_Percentage_Dist_Value <-
-  quantile(Residential_Survival_Curve_Data$Census_Owner_Occupied_Percentage
-         , probs = c(0, 0.25, 0.5, 0.75, 1)
-         , na.rm = TRUE) |>
-  round(2)
-
-Census_Owner_Occupied_Percentage_Term <-
-  paste0("Census_Owner_Occupied_Percentage ["
-       , paste(Census_Owner_Occupied_Percentage_Dist_Value, collapse = ", ")
-       , "]")
-
-## b) Calculating each one's predictors
-Census_Median_Household_Income_preds <-
+## b) Making the ecological models 
+Ecological_Height_Maturity_Predictors <-
   ggeffects::ggpredict(
-    Residential_Add_Census_CPH_Model
-  , terms = Census_Median_Household_Income_Term
+    Ecological_Residential_CPH_Model
+  , terms = Ecological_Height_Maturity_Term
   ) |>
-  mutate(variable = "Census_Median_Household_Income")
+  mutate(variable = "Ecological_Height_Maturity") |>
+  arrange(x) |>
+  dplyr::mutate(
+    x = factor(x, levels = sort(unique(x)))  
+  )
 
-Census_Percentage_At_Least_High_School_preds <-
+Ecological_Longevity_Predictors <-
   ggeffects::ggpredict(
-    Residential_Add_Census_CPH_Model
-  , terms = Census_Percentage_At_Least_High_School_Term
+    Ecological_Residential_CPH_Model
+  , terms = "Ecological_Longevity"
   ) |>
-  mutate(variable = "Census_Percentage_At_Least_High_School")
+  mutate(variable = "Ecological_Longevity"
+   , x = factor(x, levels = c("Short", "Moderate", "Long"))  
+  )
 
-Census_Percentage_At_Least_College_preds <-
-  ggeffects::ggpredict(
-    Residential_Add_Census_CPH_Model
-  , terms = Census_Percentage_At_Least_College_Term
-  ) |>
-  mutate(variable = "Census_Percentage_At_Least_College")
-
-Census_Below_Poverty_Percentage_preds <-
-  ggeffects::ggpredict(
-    Residential_Add_Census_CPH_Model
-  , terms = Census_Below_Poverty_Percentage_Term
-  ) |>
-  mutate(variable = "Census_Below_Poverty_Percentage")
-
-Census_Unemployed_Percentage_preds <-
-  ggeffects::ggpredict(
-    Residential_Add_Census_CPH_Model
-  , terms = Census_Unemployed_Percentage_Term
-  ) |>
-  mutate(variable = "Census_Unemployed_Percentage")
-
-Census_Owner_Occupied_Percentage_preds <-
-  ggeffects::ggpredict(
-    Residential_Add_Census_CPH_Model
-  , terms = Census_Owner_Occupied_Percentage_Term
-  ) |>
-  mutate(variable = "Census_Owner_Occupied_Percentage")
-
-Census_Models <-
+### c) Combining the ecological models
+Ecological_Model <-
   bind_rows(
-     Census_Median_Household_Income_preds
-   , Census_Percentage_At_Least_High_School_preds
-   , Census_Percentage_At_Least_College_preds
-   , Census_Below_Poverty_Percentage_preds
-   , Census_Unemployed_Percentage_preds
-   , Census_Owner_Occupied_Percentage_preds
+     Ecological_Height_Maturity_Predictors
+   , Ecological_Longevity_Predictors
   ) |>
   filter(!is.na(x)) #Again, not sure why there are random NA rows.
 
-## c) Plotting with facets 
-Census_Models |>
+### d) Graphing each of them now
+Ecological_Model |>
   ggplot(aes(x = x, y = predicted)) +
   geom_point(size = 2) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1) +
@@ -2691,29 +2577,342 @@ Census_Models |>
   labs(
      x = "Predictor Level"
   ,  y = "Predicted Survival (Relative Hazards/Risks)"
-  ,  title = "Predicted Survival by Census Factors"
+  ,  title = "Predicted Survival by Ecological Factors"
   ) +
-  scale_x_continuous(labels = scales::label_comma()) +
   theme_minimal(base_size = 14) +
   NULL
 
 ```
 
+## d) Parcel Model
+- Lot Size
+- Age
+- Total Value 
+
+### i) Specific Variables
+```{r}
+# 1. Checking each of the variables
+## a) Lot Size (LS)
+Parcel_Residential_LS_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Parcel_Lot_Size
+    , data = Residential_Survival_Curve_Data
+  )
+
+## b) Age [Year Built (YB)]
+Parcel_Residential_YB_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Parcel_Year_Built
+    , data = Residential_Survival_Curve_Data
+  )
+
+## c) Total Value (TV)
+Parcel_Residential_TV_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Parcel_Total_Value
+    , data = Residential_Survival_Curve_Data
+  )
+
+# 2. Comparing the Model
+performance::compare_performance(
+  Parcel_Residential_LS_CPH_Model
+, Parcel_Residential_YB_CPH_Model
+, Parcel_Residential_TV_CPH_Model
+, rank = TRUE)
+
+# 3. Results
+## Based of the AIC weight
+### - Lot Size
+## should be used as they are the best predictors
+
+```
+
+### ii) Full Selected Model
+```{r}
+# 1. Creating the Ecological Baseline Model
+Parcel_Residential_CPH_Model <-
+  survival::coxph(
+    Surv(Time, Event) ~ City + Parcel_Lot_Size
+    , data = Residential_Survival_Curve_Data
+    )
+
+# 2. Extracting the Values
+Parcel_Residential_CPH_Model |> broom::tidy()
+Parcel_Residential_CPH_Model |> ggeffects::ggpredict()
+
+# 3. Plotting the variables
+## a) Calculating the values for the continuous variables
+quantile(Residential_Survival_Curve_Data$Parcel_Lot_Size
+       , probs = c(0, 0.25, 0.5, 0.75, 1)
+       , na.rm = TRUE)
+
+Parcel_Lot_Size_Dist_Value <-
+  quantile(Residential_Survival_Curve_Data$Parcel_Lot_Size
+         , probs = c(0, 0.25, 0.5, 0.75, 1)
+         , na.rm = TRUE) |>
+  round(2)
+
+Parcel_Lot_Size_Term <-
+  paste0("Parcel_Lot_Size ["
+       , paste(Parcel_Lot_Size_Dist_Value, collapse = ", ")
+       , "]")
+
+## b) Making the ecological models 
+Parcel_Model <-
+  ggeffects::ggpredict(
+    Parcel_Residential_CPH_Model
+  , terms = Parcel_Lot_Size_Term
+  ) |>
+  mutate(variable = "Parcel_Lot_Size") |>
+  arrange(x) |>
+  dplyr::mutate(
+    x = factor(x, levels = sort(unique(x)))  
+  ) |>
+  filter(!is.na(x))
+
+### c) Graphing each of them now
+Parcel_Model |>
+  ggplot(aes(x = x, y = predicted)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1) +
+  facet_wrap(~ variable, scales = "free") +
+  labs(
+     x = "Predictor Level"
+  ,  y = "Predicted Survival (Relative Hazards/Risks)"
+  ,  title = "Predicted Survival by Parcel Factors"
+  ) +
+  theme_minimal(base_size = 14) +
+  NULL
+
+```
+
+## e) Census Model
+- Median Household Income
+- HS Education
+- College Education
+- White 
+- Poverty
+- Unemployment
+- Ownership 
+
+### i) Specific Variables
+```{r}
+# 1. Checking each of the variables
+## a) Median Household Income (MHI)
+Census_Residential_MHI_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Census_Median_Household_Income
+    , data = Residential_Survival_Curve_Data
+  )
+
+## b) Census Percentage At Least High School (ALHS)
+Census_Residential_ALHS_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Census_Percentage_At_Least_High_School
+    , data = Residential_Survival_Curve_Data
+  )
+
+## c) Census Percentage At Least College (ALC)
+Census_Residential_ALC_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Census_Percentage_At_Least_College
+  , data = Residential_Survival_Curve_Data
+  )
+
+## d) Census White Alone (WA)
+Census_Residential_WA_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Census_White_Alone_Percentage
+    , data = Residential_Survival_Curve_Data
+  )
+
+## e) Census Below Poverty (BP)
+Census_Residential_BP_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Census_Below_Poverty_Percentage
+    , data = Residential_Survival_Curve_Data
+  )
+
+## f) Census Unemployment 
+Census_Residential_Unemployment_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Census_Unemployed_Percentage
+    , data = Residential_Survival_Curve_Data
+  )
+
+## g) Census Owner Occupied (OO)  
+Census_Residential_OO_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Census_Owner_Occupied_Percentage
+    , data = Residential_Survival_Curve_Data
+  )
+
+# 2. Census Comparing Residential
+performance::compare_performance(
+ Census_Residential_MHI_CPH_Model
+, Census_Residential_ALHS_CPH_Model
+, Census_Residential_ALC_CPH_Model
+, Census_Residential_WA_CPH_Model
+, Census_Residential_BP_CPH_Model
+, Census_Residential_Unemployment_CPH_Model
+, Census_Residential_OO_CPH_Model
+, rank = TRUE)
+
+# 3. Results
+## Based of the AIC weight
+### - Median Household Income
+## should be used as they are the best predictors
+
+```
+
+### ii) Full Selected Model
+```{r}
+# 1. Creating the Census Baseline Model
+Census_Residential_CPH_Model <-
+  survival::coxph(
+     Surv(Time, Event) ~ City + Census_Median_Household_Income
+   , data = Residential_Survival_Curve_Data
+  )
+
+# 2. Extracting the values
+Census_Residential_CPH_Model |> broom::tidy()
+Census_Residential_CPH_Model |> ggeffects::ggpredict()
+
+# 3. Plotting the variables
+## a) Calculating the values for the continuous variable
+Census_Median_Household_Income_Dist_Value <-
+  quantile(
+     Residential_Survival_Curve_Data$Census_Median_Household_Income
+   , probs = c(0, 0.25, 0.5, 0.75, 1)
+   , na.rm = TRUE
+  ) |>
+  round(-3)
+
+Census_Median_Household_Income_Term <-
+  paste0(
+    "Census_Median_Household_Income["
+  ,  paste(Census_Median_Household_Income_Dist_Value, collapse = ",")
+  ,  "]"
+  )
+
+## b) Making the model of Median Household Income (MHI) 
+Census_Model <-
+  ggeffects::ggpredict(
+    Census_Residential_CPH_Model
+  , terms = Census_Median_Household_Income_Term
+  ) |>
+  dplyr::mutate(variable = "Census_Median_Household_Income") |>
+  dplyr::filter(!is.na(x))
+
+## c) Graphing each of them now
+Census_Model |>
+  ggplot(aes(x = x, y = predicted)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1) +
+  facet_wrap(~ variable, scales = "free") +
+  labs(
+     x = "Median Household Income"
+   , y = "Predicted Relative Hazard"
+   , title = "Predicted Hazard by Census Median Household Income"
+  ) +
+  scale_x_continuous(labels = scales::label_comma()) +
+  theme_minimal(base_size = 14)
+
+```
 
 ## f) Comparing the models
+### i) Comparing each individual model
+```{r}
+# 1. Comparing each individual model (w/out Yard and City for comparison)
+performance::compare_performance(
+  Ecological_Residential_SP_CPH_Model
+, Ecological_Residential_NS_CPH_Model
+, Ecological_Residential_GR_CPH_Model
+, Ecological_Residential_Longevity_CPH_Model
+, Ecological_Residential_HM_CPH_Model
+, Parcel_Residential_LS_CPH_Model
+, Parcel_Residential_YB_CPH_Model
+, Parcel_Residential_TV_CPH_Model
+, Census_Residential_MHI_CPH_Model
+, Census_Residential_ALHS_CPH_Model
+, Census_Residential_ALC_CPH_Model
+, Census_Residential_WA_CPH_Model
+, Census_Residential_BP_CPH_Model
+, Census_Residential_Unemployment_CPH_Model
+, Census_Residential_OO_CPH_Model
+, rank = TRUE)
+
+# Results: Ranking of each of the models are the following:
+# 1. Ecological_Residential_Longevity_CPH_Model          # 93.86%
+# 2. Census_Residential_ALHS_CPH_Model                   # 34.81%
+# 3. Census_Residential_Unemployment_CPH_Model           # 29.33%
+# 4. Census_Residential_WA_CPH_Model                     # 23.57%
+# 5. Census_Residential_ALC_CPH_Model                    # 23.06%
+# 6. Ecological_Residential_HM_CPH_Model                 # 20.52%
+# 7. Parcel_Residential_LS_CPH_Model                     # 20.51%
+# 8. Parcel_Residential_TV_CPH_Model                     # 18.24%
+# 9. Ecological_Residential_NS_CPH_Model                 # 17.59%
+# 10. Ecological_Residential_GR_CPH_Model                # 17.59%
+# 11. Ecological_Residential_SP_CPH_Model                # 17.38%
+# 12. Census_Residential_OO_CPH_Model                    # 15.49%
+# 13. Census_Residential_BP_CPH_Model                    # 14.62%
+# 14. Parcel_Residential_YB_CPH_Model                    # 14.16%
+# 15. Census_Residential_MHI_CPH_Model                   # 6.84%
+
+# 2. Comparing each individual model (w Yard and City for comparison)
+performance::compare_performance(
+  Baseline_Residential_CPH_Model
+, Yard_Residential_Int_CPH_Model
+, Ecological_Residential_SP_CPH_Model
+, Ecological_Residential_NS_CPH_Model
+, Ecological_Residential_GR_CPH_Model
+, Ecological_Residential_Longevity_CPH_Model
+, Ecological_Residential_HM_CPH_Model
+, Parcel_Residential_LS_CPH_Model
+, Parcel_Residential_YB_CPH_Model
+, Parcel_Residential_TV_CPH_Model
+, Census_Residential_MHI_CPH_Model
+, Census_Residential_ALHS_CPH_Model
+, Census_Residential_ALC_CPH_Model
+, Census_Residential_WA_CPH_Model
+, Census_Residential_BP_CPH_Model
+, Census_Residential_Unemployment_CPH_Model
+, Census_Residential_OO_CPH_Model
+, rank = TRUE)
+
+# Results: Ranking of each of the models (including Yard and City for comparison)
+# 1. Ecological_Residential_Longevity_CPH_Model          # 79.24%
+# 2. Yard_Residential_Int_CPH_Model                      # 38.83%
+# 3. Baseline_Residential_CPH_Model                      # 38.02%
+# 4. Census_Residential_ALHS_CPH_Model                   # 23.82%
+# 5. Census_Residential_Unemployment_CPH_Model           # 20.09%
+# 6. Census_Residential_WA_CPH_Model                     # 18.91%
+# 7. Parcel_Residential_TV_CPH_Model                     # 16.38%
+# 8. Ecological_Residential_SP_CPH_Model                 # 15.54%
+# 9. Census_Residential_ALC_CPH_Model                    # 14.84%
+# 10. Census_Residential_OO_CPH_Model                    # 14.72%
+# 11. Parcel_Residential_LS_CPH_Model                    # 14.41%
+# 12. Ecological_Residential_HM_CPH_Model                # 14.34%
+# 13. Parcel_Residential_YB_CPH_Model                    # 13.91%
+# 14. Census_Residential_BP_CPH_Model                    # 11.61%
+# 15. Ecological_Residential_NS_CPH_Model                # 6.45%
+# 16. Ecological_Residential_GR_CPH_Model                # 6.45%
+# 17. Census_Residential_MHI_CPH_Model                   # 1.92%
+```
+
+### ii) Comparing each full selected model
 ```{r}
 # 1. Comparing each of the models to see which is best
 performance::compare_performance(
-   Residential_Int_Yard_CPH_Model
- , Residential_Add_Ecological_CPH_Model
- , Residential_Add_Parcel_CPH_Model
- , Residential_Add_Census_CPH_Model
+   Yard_Residential_Int_CPH_Model
+ , Ecological_Residential_CPH_Model
+ , Parcel_Residential_CPH_Model
+ , Census_Residential_CPH_Model
  , rank = TRUE
 ) 
 
-# ESM to DHL: The best model seems to be the ecoloigcal one; however, this could be because of overfitting and overcomplicated tables from the other ones. I need to probably parse each theme a little bit more, but this is very interesting overall! Yard does not seem to be the most explanatory of the bunch.
+# ESM to DHL: The best model seems to be the ecoloigcal still, primarily due to the inclusion of longevity. Makes sense: trees with longer longevity have less deaths compared to others. Let me know what else I should do or if this has been exhausted!
 
-#ESM to DHl: What are the next steps? Is it to make the mega model of the best factors for each?
 ```
 
 
