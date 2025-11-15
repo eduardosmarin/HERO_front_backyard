@@ -195,27 +195,27 @@ Chi_Giveaway_Y2017_Y2024 |>
 # 1. City and Survivorship (Count)
 Chi_Giveaway_Y2017_Y2024 |>
   tabyl(Status, City) |> 
-  adorn_totals("row") 
+  adorn_totals("row") # more valid obs in Holyoke than Chelsea
 
 # 2. City and Survivorship (Percentage)
 Chi_Giveaway_Y2017_Y2024 |>
   tabyl(Status, City) |>
   adorn_totals("row") |>
   adorn_percentages("col") |>
-  adorn_pct_formatting(digits = 1)
+  adorn_pct_formatting(digits = 1) # similar survivorship, a little higher in Chelsea
 
 # 3. City and Survivorship (Chi Square)
 Chi_Giveaway_Y2017_Y2024 |>
   janitor::tabyl(Status, City) |> 
   janitor::chisq.test() |> 
-  broom::tidy()
+  broom::tidy() # and that difference is not significant
 ```
 
 ### iii) Time x City Survivorship
 ```{r}
 # 1. Time x City and Survivorship (Count)
 Chi_Giveaway_Y2017_Y2024 |>
-  count(Time, City, Status) |>
+  count(Time, City, Status) |> # slick! skips the group_by, very nice
   pivot_wider(
      names_from = Status
    , values_from = n
@@ -229,7 +229,7 @@ Chi_Giveaway_Y2017_Y2024 |>
   tidyr::pivot_wider(
     names_from = Status
   , values_from = n
-  , values_fill = 0 # instead of the ifelse in a mutate
+  , values_fill = 0 # instead of the ifelse in a mutate, great job
   ) |>
   mutate(
      Total = Alive + Dead
@@ -255,6 +255,22 @@ bind_rows(
       broom::tidy() |>
       mutate(Time = "T2") 
     ) 
+
+# FYI, another way to skin this cat
+bind_rows(
+    Chi_Giveaway_Y2017_Y2024 |>
+      filter(Time == "T1") |>
+      janitor::tabyl(Status, City) |>
+      janitor::chisq.test() |>
+      broom::tidy()
+  
+  , Chi_Giveaway_Y2017_Y2024 |>
+      filter(Time == "T2") |>
+      janitor::tabyl(Status, City) |>
+      janitor::chisq.test() |>
+      broom::tidy()
+  , .id = "T" # not so helpful here, but very useful in other bind_row applications.
+    ) 
 ```
 
 ## b) Site-specific Dataset
@@ -270,7 +286,7 @@ Chi_Giveaway_Yard_Y2017_Y2024 |>
   tabyl(Status, Time) |>
   adorn_totals("row") |>
   adorn_percentages("col") |>
-  adorn_pct_formatting(digits = 1)
+  adorn_pct_formatting(digits = 1) # What is your interpretation of this?
 
 # 3. Time and Survivorship (Chi Square)
 Chi_Giveaway_Yard_Y2017_Y2024 |>
@@ -280,7 +296,7 @@ Chi_Giveaway_Yard_Y2017_Y2024 |>
 
 ```
 
-### ii) City Survivorship
+### ii) City Survivorship DHL: I think this is a repeat from '### ii) City Survivorship above?'
 ```{r}
 # 1. City and Survivorship (Count)
 Chi_Giveaway_Yard_Y2017_Y2024 |>
@@ -320,7 +336,7 @@ Chi_Giveaway_Yard_Y2017_Y2024 |>
 Chi_Giveaway_Yard_Y2017_Y2024 |>
   janitor::tabyl(Status, Yard) |> 
   janitor::chisq.test() |> 
-  broom::tidy()
+  broom::tidy() # NOT significant, but this test is naive to time in ground AND potential confounders
 
 ```
 
@@ -352,6 +368,7 @@ Chi_Giveaway_Yard_Y2017_Y2024 |>
   tidylog::select(Time, City, Total, `Alive (%)`, `Dead (%)`) |>
   arrange(City, Time) 
 #ESM to DHl: Why is the Dead % so low for Chelsea in T2 within Residential Yards? Is that an error on my end? This is probably why it is significant in T2
+# DHL to ESM: question for John/Adrian?, or should we scrutinze the prior processing steps?
 
 # 3. Time x City and Survivorship (Chi Squares)
 bind_rows(
@@ -397,7 +414,7 @@ Chi_Giveaway_Yard_Y2017_Y2024 |>
    , `Dead (%)`  = round(100 * (Dead  / Total), 1)
   ) |>
   tidylog::select(Time, Yard, Total, `Alive (%)`, `Dead (%)`) |>
-  arrange(Yard, Time) 
+  arrange(Yard, Time) # Back is more lickely to be dead than front or side
 
 # 3. Time x Yard and Survivorship (Chi Squares)
 bind_rows(
@@ -417,6 +434,7 @@ bind_rows(
     )
 
 #ESM to DHL: There might be an issue currently adding the Venn Diagram of Time 2 Survey, Time 1 NA, and Survival to the dataset; might be overinflating the dataset
+# DHL to ESM: lets discuss
 ```
 
 ### vi) Time x City x Yard Survivorship
@@ -503,7 +521,7 @@ Overall_Survival_Curve_Data <-
 # double check
 Overall_Survival_Curve_Data |> 
   select(Unique_ID : Time_Period, Resurvey, Time, Event, Survival_Days_In_Ground) |> 
-  glimpse() # ERROR FIXME: time is not correctly coded
+  glimpse() # looks good
 
 ## EM: double check
 Overall_Survival_Curve_Data |>
@@ -512,6 +530,7 @@ Overall_Survival_Curve_Data |>
   filter(n() > 1) |>
   arrange(Unique_ID, Survival_Days_In_Ground, Time_Period)
 # EM to DHL: There doesn't seem to be any duplicate trees that have the same Unique ID and Days in the Ground. I am confused if it is incorrectly coded or not? I did some double checks in 00_wrangling to make sure of that. 
+# GOOD NOW
 
 
 # there should be two rows for each tree, one for time 1 and one for time 2
@@ -563,6 +582,7 @@ Residential_Survival_Curve_Data <-
 ### ii) Cross tabs
 ESM to DHL: I do not have to do time periods for the cross tabs, right? This is since time is represneted as continuous and does not to be considered
 [you do want time as in year like planted or year survyed in there for some of these. If you already have two variables, then consider filtering to only look at one of the years at a time]
+DHL to ESM: what you have above was to gain an intuitive sense for these data and to double checks. What you have right below could be suitable for the paper and/or presentations. They both have value
 
 ```{r}
 # 1. Cross tabs for Public-Private by City
@@ -612,6 +632,8 @@ ggsurvfit::ggsurvfit(Overall_KM_Model) +
    , title = "Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
    , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
   )
+
+# DHL to ESM, after 4000 days there is just 1 tree alive and 991 have died?
 
 # 2. Creating [Overall x City] Kaplan-Meier Survivorship Curve
 ## a) Creating the model
@@ -759,7 +781,7 @@ ggsurvfit::ggsurvfit(Residential_Yard_KM_Model) +
    , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
   )
 
-# ESM to DHL: Confidence intervals seem to be very large in the visualization here. What should we do? [time is not coded correctly]
+# DHL to ESM this has much more survivorship than street trees in Chelsea
 
 ## c) Testing the strength of the model
 survdiff(Surv(Time, Event) ~ Yard, data = Residential_Survival_Curve_Data)
@@ -798,7 +820,7 @@ ggsurvfit::ggsurvfit(Residential_Yard_City_KM_Model) +
 survdiff(Surv(Time, Event) ~ Yard + City, data = Residential_Survival_Curve_Data)
 # P-value: <2e-16 | Significant: Yes
 
-# ESM to DHL: Seems that the significance levels being low is primarily due to the addition of the city variable [good observation but I wouldn't put too much weight into these since time is not coded correctly]
+
 ```
 
 ## b) Ecological
@@ -816,6 +838,8 @@ Residential_Survival_Curve_Data |>
   janitor::adorn_pct_formatting(digits = 1) |>
   janitor::adorn_ns() # Adds the counts, too
 # Ecology, Should Use? No
+
+# DHL to ESM What's up witih NA's? Fix or cut
 
 # 2. Cross tabs for Native Status by City 
 ## a) Count & Percentage
@@ -947,6 +971,8 @@ ggsurvfit::ggsurvfit(Overall_SP_KM_Model) +
 ## c) Testing the strength of the model
 survdiff(Surv(Time, Event) ~ Season_Planted, data = Overall_Survival_Curve_Data)
 # P-value: 0.02 | Significant: Yes
+
+# DHL to ESM almost everything dies by 4000 days?
 
 # 2. Creating [Native Status x City] Kaplan-Meier Survivorship Curve
 ## a) Creating the model
@@ -1472,6 +1498,8 @@ ggsurvfit::ggsurvfit(Residential_LSG_City_KM_Model) +
 ## c) Testing the strength of the model
 survdiff(Surv(Time, Event) ~ Parcel_Lot_Size_Group + City, data = Residential_Survival_Curve_Data)
 # P-value: p= <2e-16 | Significant: Yes
+
+# DHL to ESM: Large (street trees from prior analyses) in Chelsea seem to do the worst. Does that match prior HERO work and your work above?
 ```
 
 #### C) Age Groups (AG) [Include: No]
@@ -1660,6 +1688,7 @@ survdiff(Surv(Time, Event) ~ Parcel_Total_Value_Group + City, data = Residential
 # P-value: p= 5e-14 | Significant: Yes
 ```
 
+# DHL to ESM: if you made a categorical variable from a continuous variable, just to look at it in K-M, and you want to keep it in the Cox PH, use the continuous version in the the coxph. So Parcel_Total_Value below, not Parcel_Total_Value_Group. In generall.
 
 ## d) Census
 ### i) Cross tabs
@@ -2010,6 +2039,7 @@ Decided to create survivorship curves because of all of the previous
 effort done earlier. However, I understand there is no quantifiable
 significance here.
 
+DHL to ESM, re: above, what? huh?
 
 #### C) Census, White Group [Include: Maybe?]
 High-percentage of white folk census block groups had a low survivorship rate overall; this could be because the program doesn't primarily focus on those areas specifically for the Greening the Gateway Cities
@@ -2413,6 +2443,8 @@ Baseline_Residential_CPH_Model <-
     )
 
 ls(pattern = 'KM_Model') #ESM to DHL: What does this do? 
+ls() # everything in memory, pattern for filitering
+
 ```
 
 ## b) Yard Model 
@@ -2912,6 +2944,26 @@ performance::compare_performance(
 ) 
 
 # ESM to DHL: The best model seems to be the ecoloigcal still, primarily due to the inclusion of longevity. Makes sense: trees with longer longevity have less deaths compared to others. Let me know what else I should do or if this has been exhausted!
+
+maximal_model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ City*Yard + Ecological_Longevity + Ecological_Height_Maturity + Census_Median_Household_Income + Parcel_Lot_Size
+    , data = Residential_Survival_Curve_Data
+  )
+
+maximal_model_plots <- 
+  maximal_model |> 
+  ggeffects::ggpredict() |> 
+  plot()
+
+maximal_model_plots$City
+maximal_model_plots$Ecological_Longevity
+maximal_model_plots$Ecological_Height_Maturity
+maximal_model_plots$Parcel_Lot_Size
+
+maximal_model |> 
+  ggeffects::ggpredict(terms = c("City", "Yard")) |> 
+  plot()
 
 ```
 
