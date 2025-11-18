@@ -2968,3 +2968,53 @@ maximal_model |>
 ```
 
 
+```{r}
+survival::coxph(Surv(Time, Event) ~ City+Yard + Ecological_Longevity, data = Residential_Survival_Curve_Data)
+survival::coxph(Surv(Time, Event) ~ City*Yard + Ecological_Longevity, data = Residential_Survival_Curve_Data)
+
+survival::coxph(Surv(Time, Event) ~ City+Yard + Parcel_Residential_Area, data = Residential_Survival_Curve_Data)
+survival::coxph(Surv(Time, Event) ~ City*Yard + Parcel_Residential_Area, data = Residential_Survival_Curve_Data)
+
+survival::coxph(Surv(Time, Event) ~ City+Yard + Census_Percentage_At_Least_High_School, data = Residential_Survival_Curve_Data)
+survival::coxph(Surv(Time, Event) ~ City*Yard + Census_Percentage_At_Least_High_School, data = Residential_Survival_Curve_Data)
+
+
+one <- survival::coxph(Surv(Time, Event) ~ City+Yard + Ecological_Longevity + Parcel_Residential_Area + Census_Percentage_At_Least_High_School, data = Residential_Survival_Curve_Data)
+two <- survival::coxph(Surv(Time, Event) ~ City*Yard + Ecological_Longevity + Parcel_Residential_Area + Census_Percentage_At_Least_High_School, data = Residential_Survival_Curve_Data)
+
+performance::compare_performance(one, two, rank = TRUE)
+
+AIC(one)
+AIC(two)
+
+p <- two |> ggeffects::ggpredict() |> plot()
+
+p$City
+p$Yard
+p$Ecological_Longevity
+p$Parcel_Residential_Area
+p$Census_Percentage_At_Least_High_School
+
+p_int <- two |> ggeffects::ggpredict(terms = c('City', 'Yard')) |> plot() + geom_hline(yintercept = 1)
+p_int
+
+p_int_all <- two |> ggeffects::ggpredict() |> plot() + geom_hline(yintercept = 1)
+p_int_all$City
+p_int_all$Yard
+p_int_all$Ecological_Longevity
+p_int_all$Parcel_Residential_Area
+p_int_all$Census_Percentage_At_Least_High_School
+
+
+# gt
+# gtsummary
+# something to make the output publication-ready
+two |> broom::tidy(conf.int = TRUE)
+
+two |> ggeffects::ggpredict(terms = c('City', 'Yard'))
+
+ggeffects::hypothesis_test()
+
+
+```
+
