@@ -370,12 +370,90 @@ Pre_Chelsea_Holyoke_Giveaways_Y2017_Y2024 <-
   , Year_Surveyed == "2025" ~ "Time 2"
   , TRUE ~ NA_character_
   )) |>
-  mutate(Survey_Year_Dataset = Year_Surveyed)
+  mutate(Survey_Year_Dataset = Year_Surveyed) |>
+  mutate(Species = ifelse(Common_Name == "Red Oak","Quercus rubra", Species))
 ```
 
 # 4. iTree Data: Cleaning and preparing for Holyoke, MA and Chelsea, MA 
 ```{r Additional iTree Data for Holyoke, MA and Chelsea, MA, echo=FALSE, message=FALSE}
-# 1. Making the Broadleaf and Conifers table
+# 1. Creating the Tree Type table
+## a) Loading in the table and making some alterations
+Pre_Tree_Type_Table <- 
+  read_excel("input_data/General/Tree_Type_Table.xlsx") |>
+  rename(Species = Genus_Species) |>
+  mutate(Species = str_trim(Species)) |> # This was because there were some species here that had a space afterwards
+  mutate(Species = case_when(
+     Species == "Cladrastis kentukea" ~ "Cladastis kentukea"
+   , Species == "Crataegus" ~ "Crataegus spp."
+   , Species == "Fagus Spp." ~ "Fagus sylvatica" #EM: The only Fagus spp. that we had
+   , Species == "Gingko biloba" ~ "Ginkgo biloba"
+   , Species == "Halesia tetraptera" ~ "Halesia monticola" #DHL: WARNING | This may need a double check since the only Halesia is Monticola but assuming not the same as tetraptera (could go into the species concern list below)
+   , Species == "Magnolia acuminata" ~ "Magnolia virginiana" #DHL: WARNING | This also may need a double check since it is not the same; more of a placeholder for now (could go into the species concern list below)
+   , Species == "Juniperus spp." ~ "Juniperus virginiana" #EM: Similar as before, the only one that they had
+   , Species == "Malus spp." ~ "Malus spp"
+   , Species == "Metasequoia spp." ~ "Metasequoia glyptostroboides" #EM: The only one that we had that was similar
+   , Species == "Ostrya spp." ~ "Ostrya virginana" #EM: Similar case here
+   , Species == "Oxydendrum arboreum" ~ "Oxydendron arboreum"
+   , Species == "Pinus nigra" ~ "Pinus strobus" #DHL: WARNING | This also may need a double check since it is not the same; more of a placeholder for now (could go into the species concern list below)
+   , Species == "Prunus spp." ~ "Prunus (species)"
+   , Species == "Thuja occidentalis" ~ "Thuja plicata" #DHL: WARNING | This also may need a double check since it is not the same; more of a placeholder for now (could go into the species concern list below)
+   , Species == "Zelkova spp." ~ "Zelkova serrata"
+, TRUE ~ Species
+  )) |>
+  mutate(Tree_Type = case_when(
+    Tree_Type == "O" ~ "Ornamental"
+  , Tree_Type == "C" ~ "Conifer"
+  , Tree_Type == "SD" ~"Shade"
+  , TRUE ~ NA_character_
+  )) |>
+  tidylog::select(-Common_Name)
+
+# SPECIES CONCERN LIST
+# DHL: After checking the database, it seems that we do not have the following species compared to the list provided by Prof. Rogan:
+# - Fringe Tree (Chionanthus virginicus)
+# - Larch (Larix spp.)
+# - Chionanthus virginicus
+
+## b) Double checks
+### i) Checking for duplicates
+Pre_Tree_Type_Table |>
+  count(Species) |>
+  filter(n > 1) # All unique
+
+### ii) Checking for unmatched types
+Unmatched_Type_Species_V1 <- 
+  Pre_Chelsea_Holyoke_Giveaways_Y2017_Y2024 |>
+  distinct(Species) |>
+  anti_join(
+    Pre_Tree_Type_Table |> distinct(Species),
+    by = "Species"
+  ) |>
+  arrange((Species))
+
+Unmatched_Type_Species_V1 |> 
+  pull(Species) |> 
+  paste(collapse = ", ")
+
+Unmatched_Type_Species_V2 <- # This one is more important for us
+  Pre_Tree_Type_Table |>
+  distinct(Species) |>
+  anti_join(
+    Pre_Chelsea_Holyoke_Giveaways_Y2017_Y2024 |> distinct(Species),
+    by = "Species"
+  ) |>
+  arrange((Species))
+
+Unmatched_Type_Species_V2 |>
+  pull(Species) |> 
+  paste(collapse = ", ")
+
+### iii) Making the final table
+Tree_Type_Table <-
+ Pre_Tree_Type_Table |>
+ rename_with(~ paste0("Ecological_", .x)
+            , .cols = -any_of("Species"))
+
+# 2. Making the Broadleaf and Conifers table
 ## a. Creating summary table of Broadleaf and Conifers for a join
 Pre_Broadleaf_Conifer_Table_V1 <- 
   st_read("input_data/General/pre_hero_tree_giveaway_all_2025-07-15.gpkg") |> #decided just to call in the final-made one
@@ -431,7 +509,7 @@ Broadleaf_Conifer_Table <-
  rename_with(~ paste0("Ecological_", .x)
             , .cols = -any_of("Species"))
 
-# 2. Creating the Native Status Table
+# 3. Creating the Native Status Table
 Native_Status_Table <- 
   st_read("input_data/General/pre_hero_tree_giveaway_all_2025-07-15.gpkg") |>
   st_drop_geometry() |>
@@ -440,7 +518,7 @@ Native_Status_Table <-
  rename_with(~ paste0("Ecological_", .x)
             , .cols = -any_of("Species"))
 
-# 3. Creating the iTree Final Table
+# 4. Creating the iTree Final Table
 ## a. Reading and renaming columns of the 
 Pre_i_Tree_Table_V1 <- 
   read_excel(
@@ -494,6 +572,8 @@ i_Tree_Table <-
   rename_with(~ paste0("Ecological_", .x)
           , .cols = -any_of(c("Genus_Name","Species","i_Tree_Code")) # Trying to make these not be note selected
     )
+
+
 
 ```
 
@@ -661,6 +741,7 @@ Pre_V3_Giveaway_Y2017_Y2024 <-
     left_join(Broadleaf_Conifer_Table, by = "Species") |>
     left_join(i_Tree_Table, by = "Species") |>
     left_join(Native_Status_Table, by = "Species") |>
+    left_join(Tree_Type_Table, by = "Species") |> # EM: Adding this but will need to change in the future
     distinct(City, Unique_ID, Date_Planted, Time_Period, .keep_all = TRUE) #This is just to remove a Duplicate of C2409; the only one which has the same values, too
 
 # 3. Calculating Days in Ground for All Data
@@ -694,7 +775,7 @@ Giveaway_Survival_Data <-
     )) |>
     filter(!is.na(Inspection_Date)) |>
   mutate(
-  , Days_In_Ground = as.integer(Inspection_Date - Date_Planted) # Calculating based off of the rules set in inspection date
+  , Days_In_Ground = as.integer(Inspection_Date - Date_Planted) # Calculating based off of- the rules set in inspection date
   # The following is for the survival analysis
   , Status = case_when(  
       Dead_Time_1 ~ 1
@@ -816,7 +897,8 @@ Final_Giveaway_Y2017_Y2024 <-
  , Ecological_Broadleaf_Conifer   
  , Ecological_Native_Status
  , Ecological_Growth_Form                 
- , Ecological_Percent_Leaf_Type           
+ , Ecological_Percent_Leaf_Type
+ , Ecological_Tree_Type
  , Ecological_Leaf_Type                   
  , Ecological_Growth_Rate                 
  , Ecological_Longevity                   
@@ -1159,7 +1241,7 @@ My_Vars <-
   , 'Total_Population_Over_25'              = 'B15003_001'
   , 'ed_High_School_Degree'                 = 'B15003_017'
   , 'ed_GED_Degree'                         = 'B15003_018'
-  , 'ed_College_Less_1_Year'                = 'B15003_019'
+  , 'ed_Collexge_Less_1_Year'                = 'B15003_019'
   , 'ed_College_More_1_Year'                = 'B15003_020'
   , 'ed_Associate_Degree'                   = 'B15003_021'
   , 'ed_plus_Bachelor_Degree'               = 'B15003_022'

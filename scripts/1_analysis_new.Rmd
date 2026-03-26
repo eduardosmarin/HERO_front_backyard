@@ -66,7 +66,7 @@ vapply(packs, library, character.only = TRUE, logical(1), logical.return = TRUE,
 ```{r}
 # 1. Reading in the final giveaway data set
 Final_Giveaway_Y2017_Y2024 <-
-  st_read("input_data/Final_Giveaway_Y2017_Y2024_2025-11-14.gpkg") |>
+  st_read("input_data/Final_Giveaway_Y2017_Y2024_2026-03-25.gpkg") |>
   st_drop_geometry()
 
 # 2. Developing the code used for the General Survivorship Curves, which can be partitioned later based on other factors
@@ -82,9 +82,9 @@ General_Giveaway_Y2017_Y2024 <-
       # Case 3: Seen in T2 (alive, so alive before)
       (Survival_Status == 0 & Survival_Inspection == 2 & Date_Planted < as_date("2017-05-30")) | 
       # Case 4: Dead in T2 & Date of the Planting > Inspection Date in T1 (Planted in between T1 and T2)
-      (Survival_Status == 1 & Survival_Inspection == 2 &
-         !is.na(Survival_Inspection_Date)  & #Ask what is NAs; do I assume it is not observed
-         Date_Planted > as_date("2017-06-27")) #That is the last inspection date of 2017 | B
+        Survival_Inspection == 2 &
+     !is.na(Survival_Inspection_Date) &
+     Date_Planted > as_date("2017-06-27")
       , na.rm = TRUE)
   ) |>
   filter(Mortality != "Unknown") |>
@@ -103,7 +103,6 @@ Giveaway_Alive_T1 <-
 
 Vector_Giveaway_Alive_T1 <-
   unique(Giveaway_Alive_T1$Unique_ID)
-
 
 Vector_Giveaway_Alive_T1
 
@@ -509,8 +508,9 @@ Chi_Giveaway_Yard_Y2017_Y2024 |>
 # 1. Preparing the Overall Survival Dataset
 Overall_Survival_Curve_Data <-
   General_Giveaway_Y2017_Y2024 |>
+  mutate(Years_In_Ground = Survival_Days_In_Ground / 365.25) |>
   mutate(
-     Time = as.numeric(Survival_Days_In_Ground) # Trying to ignore the NAs
+     Time = as.numeric(Years_In_Ground) # Trying to ignore the NAs
    , Event = Survival_Status
   ) |>
   filter(
@@ -568,8 +568,9 @@ Residential_Survival_Curve_Data <-
         , "Side" = "Side Yard"
       )) |>
   filter(!is.na(Site_Type_Specific)) |>
+  mutate(Years_In_Ground = Survival_Days_In_Ground / 365.25) |>
   mutate(
-     Time = as.numeric(Survival_Days_In_Ground) # Trying to ignore the NAs
+     Time = as.numeric(Years_In_Ground) # Trying to ignore the NAs
    , Event = Survival_Status
   ) |>
   filter(
@@ -626,11 +627,15 @@ ggsurvfit::ggsurvfit(Overall_KM_Model) +
   ggsurvfit::add_confidence_interval() +
   ggsurvfit::add_risktable() +
   ggsurvfit::add_censor_mark() +
+  scale_x_continuous(
+    name = "Time (Years)",
+    breaks = seq(0, 4000, by = 365*1) / 365.25, 
+    labels = round(seq(0, 4000, by = 365*1) / 365.25, 1)
+  ) +
   labs(
-     x = "Time (Expressed in Days)"
-   , y = "Survival probability"
-   , title = "Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
-   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+    y = "Survival Probability",
+    title = "Kaplan–Meier Curve for All GCC Tree Plantings",
+    subtitle = "Holyoke and Chelsea, MA — HERO Program 2017 & 2024 Surveys"
   )
 
 # DHL to ESM, after 4000 days there is just 1 tree alive and 991 have died?
@@ -936,6 +941,27 @@ Residential_Survival_Curve_Data |>
   janitor::adorn_pct_formatting(digits = 1) |>
   janitor::adorn_ns()
 # Ecology, Should Use with Yard? Yes
+
+# 9. Cross tabs for Tree Type by City
+## a) Count & Percentage
+Residential_Survival_Curve_Data |> # EM: Doesn't seem to have enough statistical power; we might need more of them
+  janitor::tabyl(Ecological_Tree_Type, City) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+
+# Ecology, Should Use Alone? Yes
+Residential_Survival_Curve_Data |> #  EM: Doesn't seem to have enough statistical power; we might need more of them; Very few trees to be able to identifiy this
+  janitor::tabyl(Ecological_Tree_Type, City, Yard) |>
+  janitor::adorn_totals("row") |>
+  janitor::adorn_percentages("col") |>
+  janitor::adorn_pct_formatting(digits = 1) |>
+  janitor::adorn_ns()
+# Ecology, Should Use with Yard? Yes
+
+
+
 
 # 9. Cross tabs for Height Maturity by City
 ## ESM to DHL: Should I create size classes for these to be categorical?
@@ -1274,6 +1300,7 @@ survdiff(Surv(Time, Event) ~ Ecological_Longevity + City, data = Overall_Surviva
 # P-value: 1e-04 | Significant: Yes
 ```
 
+
 ##### 2. Residential
 ```{r}
 # 1. Creating [Longevity] Kaplan-Meier Survivorship Curve
@@ -1317,6 +1344,52 @@ ggsurvfit::ggsurvfit(Residential_Longevity_City_KM_Model) +
 ## c) Testing the strength of the model
 survdiff(Surv(Time, Event) ~ Ecological_Longevity + City, data = Residential_Survival_Curve_Data)
 # P-value: 9e-12 | Significant: Yes
+```
+
+#### E) Tree Type [Include: Yes!—although low statistical power relatively, it seems to be promising]
+##### 1. Overall
+```{r}
+# 1. Creating [Tree Type] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Tree_Type_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Tree_Type, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Tree_Type_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Tree Type Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Tree_Type, data = Overall_Survival_Curve_Data)
+# P-value: 0.1 | Significant: No #Even with little number, this seems very promisign; although we need to make sure the species are correct here
+
+# 2. Creating [Tree Type x City] Kaplan-Meier Survivorship Curve
+## a) Creating the model
+Overall_Tree_Type_City_KM_Model <- 
+  ggsurvfit::survfit2(Surv(Time, Event) ~ Ecological_Tree_Type + City, data = Overall_Survival_Curve_Data) 
+
+## b) Visualizing the model
+ggsurvfit::ggsurvfit(Overall_Tree_Type_City_KM_Model) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  ggsurvfit::add_censor_mark() +
+   labs(
+     x = "Time (Expressed in Days)"
+   , y = "Survival probability"
+   , title = "Tree Type and City-Based Kaplan-Meier Curve for All Tree Plantings from Holyoke, MA and Chelsea, MA"
+   , subtitle = "As part of the HERO Program at Clark University, in 2017 and 2024, students surveyed tree mortality \nconcerning giveaways implemented through the Greening the Gateway Cities Program" 
+  )
+
+## c) Testing the strength of the model
+survdiff(Surv(Time, Event) ~ Ecological_Tree_Type + City, data = Overall_Survival_Curve_Data)
+# P-value: 3e-11 | Significant: Yes
 ```
 
 ## c) Parcel
@@ -2419,6 +2492,7 @@ Ecological:
 - Growth Rate
 - Longevity
 - Size Classes
+- Tree Type
 
 Parcel:
 - Lot Size
@@ -2525,6 +2599,13 @@ Ecological_Residential_HM_CPH_Model <-
     , data = Residential_Survival_Curve_Data
   )
 
+## e) Tree Type
+Ecological_Residential_Tree_Type_CPH_Model <- 
+  survival::coxph(
+    Surv(Time, Event) ~ Ecological_Tree_Type
+    , data = Residential_Survival_Curve_Data
+  ) # seems to be insigificant
+
 # 2. Comparing the Model
 performance::compare_performance(
   Ecological_Residential_SP_CPH_Model
@@ -2532,12 +2613,14 @@ performance::compare_performance(
 , Ecological_Residential_GR_CPH_Model
 , Ecological_Residential_Longevity_CPH_Model
 , Ecological_Residential_HM_CPH_Model
+, Ecological_Residential_Tree_Type_CPH_Model # Tree Type is preferred more actually!
 , rank = TRUE)
 
 # 3. Results
 ## Based off of the AIC weight, 
+### - Tree Type
 ### - Longevity
-### - Tree Height at Maturity 
+### - Tree Height at Maturity (goes down later)
 ## should be used as they are the best predictors.
 ```
 
@@ -2546,7 +2629,7 @@ performance::compare_performance(
 # 1. Creating the Ecological Baseline Model
 Ecological_Residential_CPH_Model <-
   survival::coxph(
-    Surv(Time, Event) ~ City + Ecological_Longevity +  Ecological_Height_Maturity
+    Surv(Time, Event) ~ City + Ecological_Longevity + Ecological_Height_Maturity
     , data = Residential_Survival_Curve_Data
     )
 
@@ -2862,6 +2945,7 @@ performance::compare_performance(
 , Ecological_Residential_GR_CPH_Model
 , Ecological_Residential_Longevity_CPH_Model
 , Ecological_Residential_HM_CPH_Model
+, Ecological_Residential_Tree_Type_CPH_Model
 , Parcel_Residential_LS_CPH_Model
 , Parcel_Residential_YB_CPH_Model
 , Parcel_Residential_TV_CPH_Model
@@ -2875,22 +2959,23 @@ performance::compare_performance(
 , rank = TRUE)
 
 # Results: Ranking of each of the models are the following:
-# 1. Ecological_Residential_Longevity_CPH_Model          # 93.86%
-# 2. Census_Residential_ALHS_CPH_Model                   # 34.81%
-# 3. Census_Residential_Unemployment_CPH_Model           # 29.33%
-# 4. Census_Residential_WA_CPH_Model                     # 23.57%
-# 5. Census_Residential_ALC_CPH_Model                    # 23.06%
-# 6. Ecological_Residential_HM_CPH_Model                 # 20.52%
-# 7. Parcel_Residential_LS_CPH_Model                     # 20.51%
-# 8. Parcel_Residential_TV_CPH_Model                     # 18.24%
-# 9. Ecological_Residential_NS_CPH_Model                 # 17.59%
-# 10. Ecological_Residential_GR_CPH_Model                # 17.59%
-# 11. Ecological_Residential_SP_CPH_Model                # 17.38%
-# 12. Census_Residential_OO_CPH_Model                    # 15.49%
-# 13. Census_Residential_BP_CPH_Model                    # 14.62%
-# 14. Parcel_Residential_YB_CPH_Model                    # 14.16%
-# 15. Census_Residential_MHI_CPH_Model                   # 6.84%
-
+# 1. Ecological_Residential_Tree_Type_CPH_Model     65.22% #DHL: States its the best mosdel currently
+# 2. Ecological_Residential_Longevity_CPH_Model     40.00%
+# 3. Census_Residential_ALHS_CPH_Model              25.97%
+# 4. Census_Residential_ALC_CPH_Model               21.24%
+# 5. Census_Residential_Unemployment_CPH_Model      21.09%
+# 6. Ecological_Residential_NS_CPH_Model            19.53%
+# 7. Ecological_Residential_GR_CPH_Model            19.53%
+# 8. Parcel_Residential_LS_CPH_Model                17.48%
+# 9. Ecological_Residential_HM_CPH_Model            16.86%
+# 10. Census_Residential_WA_CPH_Model               15.25%
+# 11. Census_Residential_BP_CPH_Model               12.84%
+# 12. Parcel_Residential_TV_CPH_Model               11.79%
+# 13. Census_Residential_MHI_CPH_Model              11.26%
+# 14. Ecological_Residential_SP_CPH_Model           10.33%
+# 15. Census_Residential_OO_CPH_Model               9.44%
+# 16. Parcel_Residential_YB_CPH_Model               9.25%
+  
 # 2. Comparing each individual model (w Yard and City for comparison)
 performance::compare_performance(
   Baseline_Residential_CPH_Model
@@ -2900,6 +2985,7 @@ performance::compare_performance(
 , Ecological_Residential_GR_CPH_Model
 , Ecological_Residential_Longevity_CPH_Model
 , Ecological_Residential_HM_CPH_Model
+, Ecological_Residential_Tree_Type_CPH_Model
 , Parcel_Residential_LS_CPH_Model
 , Parcel_Residential_YB_CPH_Model
 , Parcel_Residential_TV_CPH_Model
@@ -2913,23 +2999,24 @@ performance::compare_performance(
 , rank = TRUE)
 
 # Results: Ranking of each of the models (including Yard and City for comparison)
-# 1. Ecological_Residential_Longevity_CPH_Model          # 79.24%
-# 2. Yard_Residential_Int_CPH_Model                      # 38.83%
-# 3. Baseline_Residential_CPH_Model                      # 38.02%
-# 4. Census_Residential_ALHS_CPH_Model                   # 23.82%
-# 5. Census_Residential_Unemployment_CPH_Model           # 20.09%
-# 6. Census_Residential_WA_CPH_Model                     # 18.91%
-# 7. Parcel_Residential_TV_CPH_Model                     # 16.38%
-# 8. Ecological_Residential_SP_CPH_Model                 # 15.54%
-# 9. Census_Residential_ALC_CPH_Model                    # 14.84%
-# 10. Census_Residential_OO_CPH_Model                    # 14.72%
-# 11. Parcel_Residential_LS_CPH_Model                    # 14.41%
-# 12. Ecological_Residential_HM_CPH_Model                # 14.34%
-# 13. Parcel_Residential_YB_CPH_Model                    # 13.91%
-# 14. Census_Residential_BP_CPH_Model                    # 11.61%
-# 15. Ecological_Residential_NS_CPH_Model                # 6.45%
-# 16. Ecological_Residential_GR_CPH_Model                # 6.45%
-# 17. Census_Residential_MHI_CPH_Model                   # 1.92%
+# 1. Ecological_Residential_Tree_Type_CPH_Model 62.54% # DHL: Again, it seems to be saying it is the better model
+# 2. Yard_Residential_Int_CPH_Model             32.83%
+# 3. Baseline_Residential_CPH_Model             31.77%
+# 4. Ecological_Residential_Longevity_CPH_Model 25.38%
+# 5. Census_Residential_ALHS_CPH_Model          15.79%
+# 6. Census_Residential_Unemployment_CPH_Model  13.49%
+# 7. Census_Residential_WA_CPH_Model            12.00%
+# 8. Census_Residential_ALC_CPH_Model           11.71%
+# 9. Parcel_Residential_LS_CPH_Model            10.90%
+# 10. Parcel_Residential_TV_CPH_Model            10.52%
+# 11. Ecological_Residential_HM_CPH_Model        10.32%
+# 12. Ecological_Residential_SP_CPH_Model         9.83%
+# 13. Census_Residential_OO_CPH_Model             9.44%
+# 14. Parcel_Residential_YB_CPH_Model             9.24%
+# 15. Census_Residential_BP_CPH_Model             8.51%
+# 16. Census_Residential_MHI_CPH_Model            5.91%
+# 17. Ecological_Residential_NS_CPH_Model         5.26%
+# 18. Ecological_Residential_GR_CPH_Model         5.26%
 ```
 
 ### ii) Comparing each full selected model
@@ -2947,7 +3034,7 @@ performance::compare_performance(
 
 maximal_model <- 
   survival::coxph(
-    Surv(Time, Event) ~ City*Yard + Ecological_Longevity + Ecological_Height_Maturity + Census_Median_Household_Income + Parcel_Lot_Size
+    Surv(Time, Event) ~ City*Yard + Ecological_Tree_Type + Ecological_Height_Maturity + Census_Median_Household_Income + Parcel_Lot_Size
     , data = Residential_Survival_Curve_Data
   )
 
@@ -2957,7 +3044,7 @@ maximal_model_plots <-
   plot()
 
 maximal_model_plots$City
-maximal_model_plots$Ecological_Longevity
+maximal_model_plots$Ecological_Tree_Type #DHL: This doesn't make much sense; none are signifiant—the largest takeaway was that MHI is th best indiciator
 maximal_model_plots$Ecological_Height_Maturity
 maximal_model_plots$Parcel_Lot_Size
 
