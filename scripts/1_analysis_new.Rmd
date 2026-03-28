@@ -2518,6 +2518,7 @@ Baseline_Residential_CPH_Model <-
 
 ls(pattern = 'KM_Model') #ESM to DHL: What does this do? 
 ls() # everything in memory, pattern for filitering
+# DHL to ESM ls() lists everything in memory, the pattern argument filters to only objects with that name see help(ls)
 
 ```
 
